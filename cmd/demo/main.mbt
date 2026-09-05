@@ -58,4 +58,27 @@ fn run() -> Unit raise {
   println("user1 valid: \{uv.check(u1)}")
   println("user2 valid: \{uv.check(u2)}")
   println(@moonschema.validate_to_string(uv, u2))
+  println("")
+  println("[3] 跨字段规则 DSL + 中文错误消息")
+  let order = @builder.object({
+      "start": @builder.string(),
+      "end": @builder.string(),
+      "total": @builder.number(),
+      "items": @builder.array(
+        @builder.object({ "price": @builder.number(), "qty": @builder.number() }).optional(),
+      ),
+    })
+    .satisfy("end > start")
+    .satisfy("items[0].price * items[0].qty == total")
+  let ov = order.compile(locale=ZH)
+  let bad_json =
+    #|{
+    #|  "start": "2026-05-01",
+    #|  "end": "2026-01-01",
+    #|  "total": 99,
+    #|  "items": [ { "price": 10, "qty": 2 } ]
+    #|}
+  let bad_order = @moonschema.parse(bad_json)
+  println("valid: \{ov.check(bad_order)}")
+  println(@moonschema.validate_to_string(ov, bad_order))
 }

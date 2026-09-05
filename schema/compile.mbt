@@ -17,6 +17,7 @@ pub fn compile(
     root: schema,
     strict: options.strict,
     assert_format: options.assert_format,
+    locale: options.locale,
     cache: Map([], capacity=16),
   }
   let node = compile_node(schema, ctx, ["#"])
@@ -361,6 +362,26 @@ fn compile_keywords(
         kw.dependent_schemas = Some(
           compile_schema_map("dependentSchemas", kv, ctx, spath),
         )
+      // 引擎扩展：跨字段动态规则。表达式在编译期解析，语法错误即刻暴露；
+      // 校验期路径相对声明本关键词的节点，引用的路径全部存在才参与判定
+      "x-rules" =>
+        match kv {
+          Array(a) => {
+            let srcs : Array[String] = []
+            let exprs : Array[@rules.Expr] = []
+            for i in 0..<a.length() {
+              let src = get_str("x-rules", a[i], path)
+              srcs.push(src)
+              exprs.push(compile_rule(src, path))
+            }
+            kw.rule_srcs = Some(srcs)
+            kw.rules = Some(exprs)
+          }
+          _ =>
+            raise InvalidSchema(
+              path, "\"x-rules\" must be an array of rule strings",
+            )
+        }
       "allOf" => kw.all_of = Some(compile_schema_list("allOf", kv, ctx, spath))
       "anyOf" => kw.any_of = Some(compile_schema_list("anyOf", kv, ctx, spath))
       "oneOf" => kw.one_of = Some(compile_schema_list("oneOf", kv, ctx, spath))
@@ -401,6 +422,19 @@ fn compile_keywords(
     }
   }
   kw
+}
+
+///|
+/// 编译期解析跨字段规则表达式，语法错误包装为 InvalidSchema 即刻暴露。
+fn compile_rule(src : String, path : String) -> @rules.Expr raise CompileError {
+  let r : @rules.Expr? = Some(@rules.compile_expr(src)) catch {
+    // compile_expr 只会抛 ExprSyntax
+    ExprSyntax(m) => raise InvalidSchema(path, "invalid rule \"\{src}\": \{m}")
+  }
+  match r {
+    Some(e) => e
+    None => raise InvalidSchema(path, "invalid rule \"\{src}\"")
+  }
 }
 
 ///|

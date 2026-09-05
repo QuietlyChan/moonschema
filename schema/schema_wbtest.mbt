@@ -431,3 +431,112 @@ test "debug const group 完整复刻" {
   inspect(data.stringify(), content="9007199254740992")
   inspect(v.check(data), content="true")
 }
+
+///|
+test "x-rules: 跨字段动态规则" {
+  let s =
+    #|{
+    #|  "type": "object",
+    #|  "required": ["start", "end"],
+    #|  "properties": {
+    #|    "start": { "type": "string" },
+    #|    "end": { "type": "string" },
+    #|    "total": { "type": "number" },
+    #|    "items": {
+    #|      "type": "array",
+    #|      "items": {
+    #|        "type": "object",
+    #|        "properties": { "price": { "type": "number" }, "qty": { "type": "number" } }
+    #|      }
+    #|    }
+    #|  },
+    #|  "x-rules": [
+    #|    "end > start",
+    #|    "items[0].price * items[0].qty == total"
+    #|  ]
+    #|}
+  let v = compile(p(s))
+  let good =
+    #|{
+    #|  "start": "2026-01-01",
+    #|  "end": "2026-12-31",
+    #|  "total": 20,
+    #|  "items": [ { "price": 10, "qty": 2 } ]
+    #|}
+  inspect(v.check(p(good)), content="true")
+  let bad =
+    #|{
+    #|  "start": "2026-01-01",
+    #|  "end": "2025-01-01",
+    #|  "total": 99,
+    #|  "items": [ { "price": 10, "qty": 2 } ]
+    #|}
+  inspect(
+    summarize(v.validate(p(bad))),
+    content=(
+      #|(root): rule "end > start" is not satisfied [x-rules @ #/x-rules/0]
+      #|(root): rule "items[0].price * items[0].qty == total" is not satisfied [x-rules @ #/x-rules/1]
+    ),
+  )
+  // 规则语法错误在编译期暴露
+  let broken =
+    #|{ "x-rules": [ "end >" ] }
+  let msg = try {
+    ignore(compile(p(broken)))
+    "(no error)"
+  } catch {
+    InvalidSchema(_, m) => m
+    UnsupportedKeyword(_, k) => k
+    _ => "(parse error)"
+  }
+  inspect(msg.contains("invalid rule"), content="true")
+}
+
+///|
+test "x-rules: 缺失即藐视通过（可选字段的成对约束）" {
+  let s =
+    #|{
+    #|  "properties": {
+    #|    "start": { "type": "string" },
+    #|    "end": { "type": "string" }
+    #|  },
+    #|  "x-rules": [ "end > start" ]
+    #|}
+  let v = compile(p(s))
+  let none =
+    #|{}
+  let one =
+    #|{"start": "a"}
+  let both_bad =
+    #|{"start": "b", "end": "a"}
+  inspect(v.check(p(none)), content="true")
+  inspect(v.check(p(one)), content="true")
+  inspect(v.check(p(both_bad)), content="false")
+}
+
+///|
+test "i18n: 中文错误消息" {
+  let s =
+    #|{
+    #|  "type": "object",
+    #|  "required": ["name"],
+    #|  "properties": {
+    #|    "name": { "type": "string", "minLength": 2 },
+    #|    "age": { "type": "integer", "minimum": 0 }
+    #|  },
+    #|  "additionalProperties": false,
+    #|  "x-rules": [ "age < 150", "age > 0" ]
+    #|}
+  let v = compile(p(s), options=CompileOptions::new(locale=ZH))
+  let bad =
+    #|{ "age": -1, "extra": 1 }
+  inspect(
+    summarize(v.validate(p(bad))),
+    content=(
+      #|(root): 缺少必需属性 "name" [required @ #/required]
+      #|/age: 必须 >= 0 [minimum @ #/properties/age/minimum]
+      #|(root): 不允许出现多余属性 ("extra") [additionalProperties @ #/additionalProperties]
+      #|(root): 规则 "age > 0" 未满足 [x-rules @ #/x-rules/1]
+    ),
+  )
+}

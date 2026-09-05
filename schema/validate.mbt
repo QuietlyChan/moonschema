@@ -64,7 +64,16 @@ fn validate_node(
     BoolNode(true) => true
     BoolNode(false) => {
       errors.push(
-        err_no_leaf("false schema", ipath, spath, "boolean schema is false"),
+        err_no_leaf(
+          "false schema",
+          ipath,
+          spath,
+          tr(
+            root.ctx.locale,
+            "boolean schema is false",
+            "布尔模式为 false",
+          ),
+        ),
       )
       false
     }
@@ -116,6 +125,7 @@ fn validate_keywords(
   errors : Array[ValidationError],
 ) -> Bool {
   let start_len = errors.length()
+  let loc = root.ctx.locale
   // 2020-12：$ref 与其余关键词并存，先验证 ref 目标，再验证本地关键词
   match kw.ref_ {
     Some(r) =>
@@ -124,7 +134,18 @@ fn validate_keywords(
           let _ = validate_node(root, s.node, v, ipath, spath, errors)
         }
         None =>
-          errors.push(err("$ref", ipath, spath, "cannot resolve $ref \"\{r}\""))
+          errors.push(
+            err(
+              "$ref",
+              ipath,
+              spath,
+              tr(
+                loc,
+                "cannot resolve $ref \"\{r}\"",
+                "无法解析 $ref \"\{r}\"",
+              ),
+            ),
+          )
       }
     None => ()
   }
@@ -148,7 +169,14 @@ fn validate_keywords(
           }
           b.write_string(ts[i].label())
         }
-        errors.push(err("type", ipath, spath, "must be \{b.to_string()}"))
+        errors.push(
+          err(
+            "type",
+            ipath,
+            spath,
+            tr(loc, "must be \{b.to_string()}", "必须是 \{b.to_string()}"),
+          ),
+        )
       }
     }
     None => ()
@@ -156,7 +184,14 @@ fn validate_keywords(
   match kw.const_ {
     Some(c) =>
       if !json_eq(v, c) {
-        errors.push(err("const", ipath, spath, "must be equal to constant"))
+        errors.push(
+          err(
+            "const",
+            ipath,
+            spath,
+            tr(loc, "must be equal to constant", "必须等于常量值"),
+          ),
+        )
       }
     None => ()
   }
@@ -171,7 +206,12 @@ fn validate_keywords(
       if !ok {
         errors.push(
           err(
-            "enum", ipath, spath, "must be equal to one of the allowed values",
+            "enum",
+            ipath,
+            spath,
+            tr(
+              loc, "must be equal to one of the allowed values", "必须是允许的枚举值之一",
+            ),
           ),
         )
       }
@@ -189,7 +229,12 @@ fn validate_keywords(
         let eps = 1.0e-9 * mag
         if !(frac == 0.0 || frac < eps || 1.0 - frac < eps) {
           errors.push(
-            err("multipleOf", ipath, spath, "must be multiple of \{m}"),
+            err(
+              "multipleOf",
+              ipath,
+              spath,
+              tr(loc, "must be multiple of \{m}", "必须是 \{m} 的倍数"),
+            ),
           )
         }
       }
@@ -198,28 +243,56 @@ fn validate_keywords(
     match kw.maximum {
       Some(m) =>
         if n > m {
-          errors.push(err("maximum", ipath, spath, "must be <= \{m}"))
+          errors.push(
+            err(
+              "maximum",
+              ipath,
+              spath,
+              tr(loc, "must be <= \{m}", "必须 <= \{m}"),
+            ),
+          )
         }
       None => ()
     }
     match kw.exclusive_maximum {
       Some(m) =>
         if n >= m {
-          errors.push(err("exclusiveMaximum", ipath, spath, "must be < \{m}"))
+          errors.push(
+            err(
+              "exclusiveMaximum",
+              ipath,
+              spath,
+              tr(loc, "must be < \{m}", "必须 < \{m}"),
+            ),
+          )
         }
       None => ()
     }
     match kw.minimum {
       Some(m) =>
         if n < m {
-          errors.push(err("minimum", ipath, spath, "must be >= \{m}"))
+          errors.push(
+            err(
+              "minimum",
+              ipath,
+              spath,
+              tr(loc, "must be >= \{m}", "必须 >= \{m}"),
+            ),
+          )
         }
       None => ()
     }
     match kw.exclusive_minimum {
       Some(m) =>
         if n <= m {
-          errors.push(err("exclusiveMinimum", ipath, spath, "must be > \{m}"))
+          errors.push(
+            err(
+              "exclusiveMinimum",
+              ipath,
+              spath,
+              tr(loc, "must be > \{m}", "必须 > \{m}"),
+            ),
+          )
         }
       None => ()
     }
@@ -233,7 +306,11 @@ fn validate_keywords(
               "minLength",
               ipath,
               spath,
-              "must NOT have fewer than \{ml} characters",
+              tr(
+                loc,
+                "must NOT have fewer than \{ml} characters",
+                "字符数不能少于 \{ml}",
+              ),
             ),
           )
         }
@@ -247,7 +324,11 @@ fn validate_keywords(
               "maxLength",
               ipath,
               spath,
-              "must NOT have more than \{ml} characters",
+              tr(
+                loc,
+                "must NOT have more than \{ml} characters",
+                "字符数不能超过 \{ml}",
+              ),
             ),
           )
         }
@@ -259,7 +340,16 @@ fn validate_keywords(
           match check_format(f, sv) {
             Some(false) =>
               errors.push(
-                err("format", ipath, spath, "must match format \"\{f}\""),
+                err(
+                  "format",
+                  ipath,
+                  spath,
+                  tr(
+                    loc,
+                    "must match format \"\{f}\"",
+                    "必须符合格式 \"\{f}\"",
+                  ),
+                ),
               )
             _ => ()
           }
@@ -272,7 +362,16 @@ fn validate_keywords(
           Some(_) => ()
           None =>
             errors.push(
-              err("pattern", ipath, spath, "must match pattern \"\{src}\""),
+              err(
+                "pattern",
+                ipath,
+                spath,
+                tr(
+                  loc,
+                  "must match pattern \"\{src}\"",
+                  "必须匹配模式 \"\{src}\"",
+                ),
+              ),
             )
         }
       None => ()
@@ -283,7 +382,16 @@ fn validate_keywords(
       Some(m) =>
         if arr.length() < m {
           errors.push(
-            err("minItems", ipath, spath, "must NOT have fewer than \{m} items"),
+            err(
+              "minItems",
+              ipath,
+              spath,
+              tr(
+                loc,
+                "must NOT have fewer than \{m} items",
+                "元素个数不能少于 \{m}",
+              ),
+            ),
           )
         }
       None => ()
@@ -292,7 +400,16 @@ fn validate_keywords(
       Some(m) =>
         if arr.length() > m {
           errors.push(
-            err("maxItems", ipath, spath, "must NOT have more than \{m} items"),
+            err(
+              "maxItems",
+              ipath,
+              spath,
+              tr(
+                loc,
+                "must NOT have more than \{m} items",
+                "元素个数不能超过 \{m}",
+              ),
+            ),
           )
         }
       None => ()
@@ -318,7 +435,14 @@ fn validate_keywords(
         }
         if dup_found {
           errors.push(
-            err("uniqueItems", ipath, spath, "must NOT have duplicate items"),
+            err(
+              "uniqueItems",
+              ipath,
+              spath,
+              tr(
+                loc, "must NOT have duplicate items", "不能包含重复元素",
+              ),
+            ),
           )
         }
       }
@@ -371,7 +495,11 @@ fn validate_keywords(
               "contains",
               ipath,
               spath,
-              "must contain at least \{min_c} valid item(s)",
+              tr(
+                loc,
+                "must contain at least \{min_c} valid item(s)",
+                "至少包含 \{min_c} 个匹配 contains 的元素",
+              ),
             ),
           )
         }
@@ -383,7 +511,11 @@ fn validate_keywords(
                   "maxContains",
                   ipath,
                   spath,
-                  "must contain no more than \{mc} valid item(s)",
+                  tr(
+                    loc,
+                    "must contain no more than \{mc} valid item(s)",
+                    "匹配 contains 的元素不能超过 \{mc} 个",
+                  ),
                 ),
               )
             }
@@ -402,7 +534,11 @@ fn validate_keywords(
               "minProperties",
               ipath,
               spath,
-              "must NOT have fewer than \{m} properties",
+              tr(
+                loc,
+                "must NOT have fewer than \{m} properties",
+                "属性个数不能少于 \{m}",
+              ),
             ),
           )
         }
@@ -416,7 +552,11 @@ fn validate_keywords(
               "maxProperties",
               ipath,
               spath,
-              "must NOT have more than \{m} properties",
+              tr(
+                loc,
+                "must NOT have more than \{m} properties",
+                "属性个数不能超过 \{m}",
+              ),
             ),
           )
         }
@@ -432,7 +572,11 @@ fn validate_keywords(
                 "required",
                 ipath,
                 spath,
-                "must have required property \"\{p}\"",
+                tr(
+                  loc,
+                  "must have required property \"\{p}\"",
+                  "缺少必需属性 \"\{p}\"",
+                ),
               ),
             )
           }
@@ -495,7 +639,11 @@ fn validate_keywords(
                 "additionalProperties",
                 ipath,
                 spath,
-                "must NOT have additional properties (\"\{k}\")",
+                tr(
+                  loc,
+                  "must NOT have additional properties (\"\{k}\")",
+                  "不允许出现多余属性 (\"\{k}\")",
+                ),
               ),
             )
           }
@@ -545,7 +693,11 @@ fn validate_keywords(
                     "dependentRequired",
                     ipath,
                     spath,
-                    "must have property \"\{d}\" when property \"\{k}\" is present",
+                    tr(
+                      loc,
+                      "must have property \"\{d}\" when property \"\{k}\" is present",
+                      "存在属性 \"\{k}\" 时必须同时提供 \"\{d}\"",
+                    ),
                   ),
                 )
               }
@@ -594,7 +746,16 @@ fn validate_keywords(
         }
       }
       if !matched {
-        errors.push(err("anyOf", ipath, spath, "must match a schema in anyOf"))
+        errors.push(
+          err(
+            "anyOf",
+            ipath,
+            spath,
+            tr(
+              loc, "must match a schema in anyOf", "必须匹配 anyOf 中的至少一个模式",
+            ),
+          ),
+        )
       }
     }
     None => ()
@@ -619,7 +780,11 @@ fn validate_keywords(
             "oneOf",
             ipath,
             spath,
-            "must match exactly one schema in oneOf (matched \{pass_count})",
+            tr(
+              loc,
+              "must match exactly one schema in oneOf (matched \{pass_count})",
+              "必须且只能匹配 oneOf 中的一个模式（实际匹配 \{pass_count} 个）",
+            ),
           ),
         )
       }
@@ -633,7 +798,14 @@ fn validate_keywords(
       let ok = validate_node(root, n.node, v, ipath, spath, sub)
       ignore(spath.pop())
       if ok {
-        errors.push(err("not", ipath, spath, "must NOT be valid"))
+        errors.push(
+          err(
+            "not",
+            ipath,
+            spath,
+            tr(loc, "must NOT be valid", "不能匹配 not 模式"),
+          ),
+        )
       }
     }
     None => ()
@@ -664,6 +836,35 @@ fn validate_keywords(
         }
       }
     }
+    None => ()
+  }
+  // 跨字段动态规则（x-rules）：在其余关键词之后判定
+  match kw.rules {
+    Some(exprs) =>
+      match kw.rule_srcs {
+        Some(srcs) =>
+          for i in 0..<exprs.length() {
+            if !@rules.rule_holds(exprs[i], v) {
+              spath.push("x-rules")
+              spath.push(i.to_string())
+              errors.push(
+                err_no_leaf(
+                  "x-rules",
+                  ipath,
+                  spath,
+                  tr(
+                    loc,
+                    "rule \"\{srcs[i]}\" is not satisfied",
+                    "规则 \"\{srcs[i]}\" 未满足",
+                  ),
+                ),
+              )
+              ignore(spath.pop())
+              ignore(spath.pop())
+            }
+          }
+        None => ()
+      }
     None => ()
   }
   errors.length() == start_len

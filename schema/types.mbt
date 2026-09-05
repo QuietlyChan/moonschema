@@ -114,6 +114,23 @@ pub impl Show for CompileError with fn output(self, logger) {
 }
 
 ///|
+/// 校验错误消息的语言（影响实例校验失败的消息文本；
+/// 模式编译错误面向开发者，始终为英文）。
+pub(all) enum Locale {
+  EN
+  ZH
+} derive(Eq)
+
+///|
+/// 按语言挑选消息文案。
+fn tr(locale : Locale, en : String, zh : String) -> String {
+  match locale {
+    EN => en
+    ZH => zh
+  }
+}
+
+///|
 /// 编译选项（见 `compile`）。
 pub struct CompileOptions {
   /// strict 模式（默认开启，ajv 风格）：引擎不支持的关键词直接报错，
@@ -123,14 +140,17 @@ pub struct CompileOptions {
   /// 按 2020-12 规范，`format` 默认只是 annotation（不断言）。
   /// 打开后对认识的 format（email / uuid / ipv4）进行断言。
   assert_format : Bool
+  /// 校验错误消息语言，默认英文。
+  locale : Locale
 } derive(Eq)
 
 ///|
 pub fn CompileOptions::new(
   strict? : Bool = true,
   assert_format? : Bool = false,
+  locale? : Locale = EN,
 ) -> CompileOptions {
-  { strict, assert_format }
+  { strict, assert_format, locale }
 }
 
 ///|
@@ -139,6 +159,7 @@ struct Ctx {
   root : Json
   strict : Bool
   assert_format : Bool
+  locale : Locale
   cache : Map[String, Schema]
 }
 
@@ -187,6 +208,9 @@ priv struct Keywords {
   mut additional : Schema?
   mut dependent_required : Map[String, Array[String]]?
   mut dependent_schemas : Map[String, Schema]?
+  // 跨字段动态规则（引擎扩展关键词 x-rules，路径相对本节点实例）
+  mut rule_srcs : Array[String]?
+  mut rules : Array[@rules.Expr]?
   // 组合器
   mut all_of : Array[Schema]?
   mut any_of : Array[Schema]?
@@ -231,6 +255,8 @@ fn Keywords::empty() -> Keywords {
     additional: None,
     dependent_required: None,
     dependent_schemas: None,
+    rule_srcs: None,
+    rules: None,
     all_of: None,
     any_of: None,
     one_of: None,

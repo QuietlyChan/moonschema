@@ -23,8 +23,9 @@ pub impl Show for CompileError
 pub struct CompileOptions {
   strict : Bool
   assert_format : Bool
+  locale : Locale
 } derive(Eq)
-pub fn CompileOptions::new(strict? : Bool, assert_format? : Bool) -> Self
+pub fn CompileOptions::new(strict? : Bool, assert_format? : Bool, locale? : Locale) -> Self
 
 type Ctx
 
@@ -36,6 +37,11 @@ pub(all) enum JsonType {
   JTNumber
   JTString
   JTInteger
+} derive(Eq)
+
+pub(all) enum Locale {
+  EN
+  ZH
 } derive(Eq)
 
 type Node

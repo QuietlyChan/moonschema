@@ -42,9 +42,10 @@ pub struct SchemaBuilder {
   mut nullable_ : Bool
   mut strict_ : Bool
   mut catchall_ : SchemaBuilder?
+  mut rules_ : Array[String]?
 }
 pub fn SchemaBuilder::catchall(Self, Self) -> Self
-pub fn SchemaBuilder::compile(Self) -> @schema.Schema raise @schema.CompileError
+pub fn SchemaBuilder::compile(Self, locale? : @schema.Locale) -> @schema.Schema raise @schema.CompileError
 pub fn SchemaBuilder::describe(Self, String) -> Self
 pub fn SchemaBuilder::email(Self) -> Self
 pub fn SchemaBuilder::gt(Self, Double) -> Self
@@ -59,6 +60,7 @@ pub fn SchemaBuilder::min_len(Self, Int) -> Self
 pub fn SchemaBuilder::multiple_of(Self, Double) -> Self
 pub fn SchemaBuilder::nullable(Self) -> Self
 pub fn SchemaBuilder::optional(Self) -> Self
+pub fn SchemaBuilder::satisfy(Self, String) -> Self
 pub fn SchemaBuilder::strict(Self) -> Self
 pub fn SchemaBuilder::to_schema(Self) -> Json
 pub fn SchemaBuilder::unique_items(Self) -> Self

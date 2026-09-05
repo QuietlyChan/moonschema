@@ -97,3 +97,36 @@ test "to_schema 与手写 JSON Schema 互通（compile 侧验证）" {
   inspect(v.check(Json::number(9.5)), content="true")
   inspect(v.check(Json::number(-1)), content="false")
 }
+
+///|
+test "satisfy: builder 追加跨字段规则" {
+  let order = object({
+      "start": string(),
+      "end": string(),
+      "total": number(),
+      "items": array(object({ "price": number(), "qty": number() }).optional()),
+    })
+    .satisfy("end > start")
+    .satisfy("items[0].price * items[0].qty == total")
+  // 降级文档带 x-rules
+  inspect(order.to_schema().stringify().contains("x-rules"), content="true")
+  let v = order.compile()
+  let good = Json::object({
+    "start": Json::string("2026-01-01"),
+    "end": Json::string("2026-12-31"),
+    "total": Json::number(20),
+    "items": Json::array([
+      Json::object({ "price": Json::number(10), "qty": Json::number(2) }),
+    ]),
+  })
+  inspect(v.check(good), content="true")
+  let bad = Json::object({
+    "start": Json::string("2026-01-01"),
+    "end": Json::string("2026-02-01"),
+    "total": Json::number(1),
+    "items": Json::array([
+      Json::object({ "price": Json::number(10), "qty": Json::number(2) }),
+    ]),
+  })
+  inspect(v.check(bad), content="false")
+}

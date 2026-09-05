@@ -7,7 +7,8 @@
 ## 为什么是 moonschema
 
 - **两层 API，一个引擎**：ajv 的 "编译 JSON Schema 文档 → 复用校验器" 适合前后端契约校验；zod 的 "字段默认必填 + 流式约束" 适合 MoonBit 业务代码内联建模。两者编译到同一份内部表示，语义完全一致。
-- **错误看得见**：每条错误携带 `keyword`、`instance_path`（RFC 6901 JSON Pointer）、`schema_path` 三元组，ajv 风格的英文消息可直接展示给用户。
+- **跨字段动态规则 DSL**：`"end > start"`、`"items[0].price * items[0].qty == total"` 这类跨字段约束，表达式在**编译期**解析（语法错误即刻暴露），弥补声明式 JSON Schema 表达不了的表单级规则。
+- **错误看得见、可中文化**：每条错误携带 `keyword`、`instance_path`（RFC 6901 JSON Pointer）、`schema_path` 三元组；校验消息内置中英双语（`locale=ZH` 一行切换）。
 - **strict 模式**（ajv 同款默认行为）：拼错的关键词在**编译期**报错，而不是被静默忽略。
 - **递归 `$ref` 可用**：树/链表等递归模式通过惰性解析 + 编译缓存支持。
 - **纯 MoonBit、零第三方依赖**：仅依赖标准库 `moonbitlang/core`，天然跨 WASM-GC / JS / Native。
@@ -80,11 +81,63 @@ for e in errors {
 | 数组 | `items`、`prefixItems`、`minItems`、`maxItems`、`uniqueItems`、`contains`、`minContains`、`maxContains` |
 | 对象 | `properties`、`patternProperties`、`required`、`additionalProperties`、`propertyNames`、`minProperties`、`maxProperties`、`dependentRequired`、`dependentSchemas` |
 | 组合 | `allOf`、`anyOf`、`oneOf`、`not`、`if`/`then`/`else` |
-| 编译选项 | `strict`（未知关键词报错，`x-` 前缀扩展放行）、`assert_format` |
+| 扩展 | `x-rules`：跨字段动态规则 DSL（见下节） |
+| 编译选项 | `strict`（未知关键词报错，`x-` 前缀扩展放行）、`assert_format`、`locale`（错误消息 EN/ZH） |
 
 **暂不支持**（编译期明确报错而非静默跳过）：远程 `$ref`（http/https）、命名 fragment 引用（`$anchor` / `$dynamicRef`）、子模式中的 `$id`（base URI 变更）、`unevaluatedProperties` / `unevaluatedItems`。draft-07 的 `items` 数组形式会给出迁移到 `prefixItems` 的提示。
 
 注：`multipleOf` 使用浮点商的相对容差判定，`0.0075 % 0.0001` 这类十进制直觉场景不会因 IEEE 754 精度噪声误判。
+
+## 跨字段规则 DSL（`x-rules`）
+
+声明式 JSON Schema 表达不了 "结束日期晚于开始日期" 这类表单级约束，moonschema 用一条表达式 DSL 补齐：
+
+```moonbit
+// builder 侧
+let order = @builder.object({
+  "start": @builder.string(),
+  "end":   @builder.string(),
+  "total": @builder.number(),
+  "items": @builder.array(@builder.object({
+    "price": @builder.number(), "qty": @builder.number(),
+  }).optional()),
+}).satisfy("end > start")
+  .satisfy("items[0].price * items[0].qty == total")
+
+// JSON Schema 侧等价写法
+// { "x-rules": ["end > start", "items[0].price * items[0].qty == total"] }
+```
+
+| 类别 | 运算符 |
+|---|---|
+| 比较 | `==` `!=` `<` `<=` `>` `>=`（数值按大小、字符串按字典序——ISO 日期可直接比较；跨类型为假） |
+| 算术 | `+` `-` `*` `/` `%`（除零等产生非有限值时规则不可满足） |
+| 逻辑 | `&&` `\|\|` `!`（短路） |
+| 字面量 | 数字、字符串（`"..."`）、`true` / `false` / `null` |
+| 路径 | 字段名、点号嵌套（`address.city`）、数组下标（`items[0].price`） |
+
+语义要点：
+
+- **缺失即藐视通过**：表达式引用的路径全部存在才参与判定——可选项的成对约束只约束"存在"的场合，是否必填仍由默认必填 / `.optional()` / `required` 表达
+- **编译期语法检查**：规则在 `compile()` 时解析，拼写错误立刻暴露，而不是等到校验期静默失效
+- 错误的 `schema_path` 精确到 `#/x-rules/<序号>`
+
+## 错误消息 i18n
+
+```moonbit
+// JSON Schema 侧
+let v = compile(schema, options=CompileOptions::new(locale=ZH))
+// builder 侧
+let v = user.compile(locale=ZH)
+```
+
+```text
+(root): 缺少必需属性 "name" [required @ #/required]
+/age: 必须 >= 0 [minimum @ #/properties/age/minimum]
+(root): 规则 "age > 0" 未满足 [x-rules @ #/x-rules/1]
+```
+
+默认英文；`Locale::EN` / `Locale::ZH` 内置，消息本地化只影响校验结果（模式编译错误面向开发者，始终英文）。
 
 ## 官方一致性测试
 
@@ -130,8 +183,8 @@ moon fmt && moon info       # 格式化 + 更新包接口
 
 - [x] **W1** 引擎核心：编译器 + 校验器 + 错误模型 + `$ref` 惰性解析（双目标测试通过）
 - [x] **W2** 官方 JSON-Schema-Test-Suite 接入与跑分（**974/975 判定通过，99.90%**）；`pattern` / `patternProperties`（基于 core 正则引擎）；整数解析溢出修复（core 上游 bug workaround）
-- [ ] **W2 剩余** 错误消息 i18n（中/英）
-- [ ] **W3** 跨字段动态规则 DSL（如 `rule: "end_date > start_date"`，表达式编译为校验器）；quickcheck 性质测试（builder ⇄ JSON Schema 文档 roundtrip）
+- [x] **W3** 跨字段动态规则 DSL（`x-rules` + builder `.satisfy()`，编译期语法检查）；错误消息 i18n（中/英）
+- [ ] **W3 剩余** quickcheck 性质测试（builder ⇄ JSON Schema 文档 roundtrip）
 - [ ] **W4** WASM Playground（浏览器实时校验）；对 ajv / zod 的基准测试报告；发布到 mooncakes.io
 
 ## License

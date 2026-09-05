@@ -16,6 +16,7 @@ pub struct SchemaBuilder {
   mut nullable_ : Bool
   mut strict_ : Bool
   mut catchall_ : SchemaBuilder?
+  mut rules_ : Array[String]?
 }
 
 ///|
@@ -29,6 +30,7 @@ fn SchemaBuilder::make(t? : String) -> SchemaBuilder {
     nullable_: false,
     strict_: false,
     catchall_: None,
+    rules_: None,
   }
 }
 
@@ -43,6 +45,7 @@ fn SchemaBuilder::dup(self : SchemaBuilder) -> SchemaBuilder {
     nullable_: self.nullable_,
     strict_: self.strict_,
     catchall_: self.catchall_,
+    rules_: self.rules_,
   }
 }
 
@@ -260,6 +263,26 @@ pub fn SchemaBuilder::describe(
 }
 
 ///|
+/// 追加一条跨字段动态规则（引擎扩展关键词 `x-rules`）。
+///
+/// 表达式路径相对声明节点的实例，例如
+/// `"end_date > start_date"`、`"items[0].price * items[0].qty == total"`。
+/// 表达式引用的路径**全部存在**时才参与判定（缺失即藐视通过），
+/// 字段是否必填仍由默认必填 / `.optional()` 表达。
+/// 通常作用于 `object(...)` 节点；规则语法错误在 `.compile()` 时即报错。
+pub fn SchemaBuilder::satisfy(
+  self : SchemaBuilder,
+  expr : String,
+) -> SchemaBuilder {
+  let b = self.dup()
+  match b.rules_ {
+    Some(rs) => rs.push(expr)
+    None => b.rules_ = Some([expr])
+  }
+  b
+}
+
+///|
 /// 降级为标准 JSON Schema 2020-12 文档。
 pub fn SchemaBuilder::to_schema(self : SchemaBuilder) -> Json {
   let m : Map[String, Json] = Map([], capacity=8)
@@ -274,6 +297,10 @@ pub fn SchemaBuilder::to_schema(self : SchemaBuilder) -> Json {
   }
   for k, v in self.kw {
     m[k] = v
+  }
+  match self.rules_ {
+    Some(rs) => m["x-rules"] = Json::array(rs.map(Json::string))
+    None => ()
   }
   match self.item {
     Some(it) => m["items"] = it.to_schema()
@@ -309,11 +336,13 @@ pub fn SchemaBuilder::to_schema(self : SchemaBuilder) -> Json {
 ///|
 /// 编译为 moonschema 校验器。builder 层自动开启 format 断言
 /// （`.email()` / `.uuid()` / `.ipv4()` 因此真实生效）。
+/// `locale` 指定校验错误消息语言（默认英文，中文传 `ZH`）。
 pub fn SchemaBuilder::compile(
   self : SchemaBuilder,
+  locale? : @schema.Locale = @schema.Locale::EN,
 ) -> @schema.Schema raise @schema.CompileError {
   @schema.compile(
     self.to_schema(),
-    options=@schema.CompileOptions::new(assert_format=true),
+    options=@schema.CompileOptions::new(assert_format=true, locale~),
   )
 }
