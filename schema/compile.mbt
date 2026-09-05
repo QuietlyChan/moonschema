@@ -221,8 +221,8 @@ fn compile_keywords(
   for name, kv in map {
     match name {
       // 元数据与 annotation：合法但不参与校验
+      // （$id 例外：根节点忽略，子节点意味着 base URI 变更，见下方专门分支）
       "$schema"
-      | "$id"
       | "$comment"
       | "$defs"
       | "definitions"
@@ -283,6 +283,11 @@ fn compile_keywords(
       "minLength" => kw.min_length = Some(compile_count("minLength", kv, spath))
       "maxLength" => kw.max_length = Some(compile_count("maxLength", kv, spath))
       "format" => kw.format = Some(get_str("format", kv, path))
+      "pattern" => {
+        let p = get_str("pattern", kv, path)
+        let re = compile_regex(p, path)
+        kw.pattern = Some((re, p))
+      }
       "minItems" => kw.min_items = Some(compile_count("minItems", kv, spath))
       "maxItems" => kw.max_items = Some(compile_count("maxItems", kv, spath))
       "uniqueItems" =>
@@ -318,6 +323,23 @@ fn compile_keywords(
         kw.required = Some(compile_string_list("required", kv, spath))
       "properties" =>
         kw.properties = Some(compile_schema_map("properties", kv, ctx, spath))
+      "patternProperties" =>
+        match kv {
+          Object(m) => {
+            let arr : Array[(@string.Regex, String, Schema)] = []
+            for pk, sub in m {
+              let re = compile_regex(pk, path)
+              spath.push("patternProperties")
+              spath.push(pk)
+              arr.push((re, pk, compile_schema(sub, ctx, spath)))
+              ignore(spath.pop())
+              ignore(spath.pop())
+            }
+            kw.pattern_properties = Some(arr)
+          }
+          _ =>
+            raise InvalidSchema(path, "\"patternProperties\" must be an object")
+        }
       "propertyNames" =>
         kw.property_names = Some(
           compile_subschema("propertyNames", kv, ctx, spath),
@@ -346,7 +368,9 @@ fn compile_keywords(
       "if" => kw.if_ = Some(compile_subschema("if", kv, ctx, spath))
       "then" => kw.then_ = Some(compile_subschema("then", kv, ctx, spath))
       "else" => kw.else_ = Some(compile_subschema("else", kv, ctx, spath))
-      // 2020-12：$ref 可与其他关键词并存，校验时先解析 ref，再验证其余关键词
+      // 2020-12：$ref 可与其他关键词并存，校验时先解析 ref，再验证其余关键词。
+      // 仅支持 JSON Pointer fragment（"#"/"#/..."）；命名 fragment（$anchor
+      // 引用如 "#foo"）在编译期明确拒绝，避免静默误判。
       "$ref" => {
         let r = get_str("$ref", kv, path)
         if !has_str_prefix(r, "#") {
@@ -355,8 +379,20 @@ fn compile_keywords(
             "only local \"$ref\" targets (\"#/...\") are supported in v0, got \"\{r}\"",
           )
         }
+        if r != "#" && !has_str_prefix(r, "#/") {
+          raise InvalidSchema(
+            path,
+            "named fragment \"$ref\" targets (e.g. \"#foo\", $anchor refs) are not supported in v0, got \"\{r}\"",
+          )
+        }
         kw.ref_ = Some(r)
       }
+      // 仅根节点允许 $id（当作 annotation）；子 schema 中的 $id 意味着
+      // base URI 变更，会改变 $ref 解析语义，v0 不支持，strict 下明确拒绝
+      "$id" =>
+        if spath.length() > 1 && ctx.strict {
+          raise UnsupportedKeyword(path, "$id (base URI change)")
+        }
       other =>
         // strict 模式（ajv 风格）：不认识的关键词直接报错，`x-` 前缀的厂商扩展除外
         if ctx.strict && !has_str_prefix(other, "x-") {
@@ -365,4 +401,16 @@ fn compile_keywords(
     }
   }
   kw
+}
+
+///|
+/// 编译期把正则表达式解析为 `@string.Regex`，非法模式立即报错。
+fn compile_regex(p : String, path : String) -> @string.Regex raise CompileError {
+  let parsed : @string.Regex? = Some(@string.Regex::Regex(p)) catch {
+    _ => None
+  }
+  match parsed {
+    Some(re) => re
+    None => raise InvalidSchema(path, "invalid regular expression \"\{p}\"")
+  }
 }

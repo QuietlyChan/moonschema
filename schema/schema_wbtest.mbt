@@ -395,3 +395,39 @@ test "format: 默认 annotation, 开启 assert_format 后断言" {
   let unknown = compile(p(su), options=CompileOptions::new(assert_format=true))
   inspect(unknown.check(Json::string("whatever")), content="true")
 }
+
+///|
+/// 回归：core JSON 解析器整数路径在 |n| >= 2^53 误产出 Infinity，
+/// `parse` 用 repr 重解析修复（见 api.mbt / fix_integer_overflow）。
+test "2^53 整数溢出修复后 const 按值相等" {
+  let sa =
+    #|9007199254740992
+  let sb =
+    #|9007199254740992.0
+  let a = parse(sa)
+  let b = parse(sb)
+  inspect(json_eq(a, b), content="true")
+  let sc =
+    #|{ "const": 9007199254740992 }
+  let v = compile(p(sc))
+  inspect(v.check(b), content="true")
+  // 边界之内不受影响
+  let sd =
+    #|9007199254740991
+  inspect(parse(sd).stringify(), content="9007199254740991")
+}
+
+///|
+test "debug const group 完整复刻" {
+  let s =
+    #|{
+    #|  "$schema": "https://json-schema.org/draft/2020-12/schema",
+    #|  "const": 9007199254740992
+    #|}
+  let d =
+    #|9007199254740992.0
+  let v = compile(p(s))
+  let data = p(d)
+  inspect(data.stringify(), content="9007199254740992")
+  inspect(v.check(data), content="true")
+}

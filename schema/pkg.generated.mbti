@@ -52,7 +52,7 @@ pub(all) struct ValidationError {
   instance_path : String
   schema_path : String
   message : String
-} derive(Eq, Show, ToJson)
+} derive(Eq, ToJson)
 
 // Type aliases
 

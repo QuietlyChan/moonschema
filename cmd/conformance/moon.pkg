@@ -1,0 +1,5 @@
+import {
+  "QuietlyChan/moonschema",
+}
+
+pkgtype(kind: "executable")

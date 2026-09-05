@@ -31,6 +31,27 @@ fn err_no_leaf(
 }
 
 ///|
+/// 属性键是否已被 `properties` / `patternProperties` "评估"——
+/// 决定 `additionalProperties` 是否对其生效。
+fn key_is_known(kw : Keywords, k : String) -> Bool {
+  match kw.properties {
+    Some(p) => if p.contains(k) { return true }
+    None => ()
+  }
+  match kw.pattern_properties {
+    Some(pairs) =>
+      for i in 0..<pairs.length() {
+        match pairs[i].0.execute(k) {
+          Some(_) => return true
+          None => ()
+        }
+      }
+    None => ()
+  }
+  false
+}
+
+///|
 fn validate_node(
   root : Schema,
   node : Node,
@@ -134,7 +155,7 @@ fn validate_keywords(
   }
   match kw.const_ {
     Some(c) =>
-      if !(v == c) {
+      if !json_eq(v, c) {
         errors.push(err("const", ipath, spath, "must be equal to constant"))
       }
     None => ()
@@ -143,7 +164,7 @@ fn validate_keywords(
     Some(vals) => {
       let mut ok = false
       for i in 0..<vals.length() {
-        if v == vals[i] {
+        if json_eq(v, vals[i]) {
           ok = true
         }
       }
@@ -159,12 +180,19 @@ fn validate_keywords(
   }
   if v is Number(n, ..) {
     match kw.multiple_of {
-      Some(m) =>
-        if !(n % m == 0.0) {
+      Some(m) => {
+        // 浮点求余对 0.0075 % 0.0001 这类十进制场景有精度噪声，
+        // 改用商到最近整数的相对容差判定（与主流实现一致的工程取舍）
+        let q = n / m
+        let frac = q - q.floor()
+        let mag = if q.abs() > 1.0 { q.abs() } else { 1.0 }
+        let eps = 1.0e-9 * mag
+        if !(frac == 0.0 || frac < eps || 1.0 - frac < eps) {
           errors.push(
             err("multipleOf", ipath, spath, "must be multiple of \{m}"),
           )
         }
+      }
       None => ()
     }
     match kw.maximum {
@@ -199,7 +227,7 @@ fn validate_keywords(
   if v is String(sv) {
     match kw.min_length {
       Some(ml) =>
-        if sv.length() < ml {
+        if str_code_points(sv) < ml {
           errors.push(
             err(
               "minLength",
@@ -213,7 +241,7 @@ fn validate_keywords(
     }
     match kw.max_length {
       Some(ml) =>
-        if sv.length() > ml {
+        if str_code_points(sv) > ml {
           errors.push(
             err(
               "maxLength",
@@ -235,6 +263,17 @@ fn validate_keywords(
               )
             _ => ()
           }
+        }
+      None => ()
+    }
+    match kw.pattern {
+      Some((re, src)) =>
+        match re.execute(sv) {
+          Some(_) => ()
+          None =>
+            errors.push(
+              err("pattern", ipath, spath, "must match pattern \"\{src}\""),
+            )
         }
       None => ()
     }
@@ -269,7 +308,7 @@ fn validate_keywords(
           }
           let mut j = 0
           while j < i {
-            if arr[i] == arr[j] {
+            if json_eq(arr[i], arr[j]) {
               dup_found = true
               break
             }
@@ -418,14 +457,39 @@ fn validate_keywords(
         }
       None => ()
     }
+    // patternProperties：键名匹配正则的每个值都要通过对应模式
+    match kw.pattern_properties {
+      Some(pairs) =>
+        for k, ov in obj {
+          for i in 0..<pairs.length() {
+            let pair = pairs[i]
+            match pair.0.execute(k) {
+              Some(_) => {
+                ipath.push(k)
+                spath.push("patternProperties")
+                spath.push(pair.1)
+                let _ = validate_node(
+                  root,
+                  pair.2.node,
+                  ov,
+                  ipath,
+                  spath,
+                  errors,
+                )
+                ignore(spath.pop())
+                ignore(spath.pop())
+                ignore(ipath.pop())
+              }
+              None => ()
+            }
+          }
+        }
+      None => ()
+    }
     match kw.additional_closed {
       Some(true) =>
         for k, _ov in obj {
-          let known = match kw.properties {
-            Some(p) => p.contains(k)
-            None => false
-          }
-          if !known {
+          if !key_is_known(kw, k) {
             errors.push(
               err(
                 "additionalProperties",
@@ -441,11 +505,7 @@ fn validate_keywords(
     match kw.additional {
       Some(add) =>
         for k, ov in obj {
-          let known = match kw.properties {
-            Some(p) => p.contains(k)
-            None => false
-          }
-          if !known {
+          if !key_is_known(kw, k) {
             ipath.push(k)
             spath.push("additionalProperties")
             let _ = validate_node(root, add.node, ov, ipath, spath, errors)

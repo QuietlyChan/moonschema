@@ -66,7 +66,8 @@ fn schema_pointer(path : Array[String]) -> String {
 
 ///|
 /// 解析本地 `$ref` 目标（`"#"` 或 `"#/a/b"`），返回去掉 `#` 的 token 列表。
-/// 非本地引用返回 `None`。
+/// token 依次做百分号解码（URI 层）与 `~0`/`~1` 解码（pointer 层）。
+/// 命名 fragment（如 `#foo`，即 `$anchor` 引用）不是 JSON Pointer，返回 `None`。
 fn parse_local_ref(pointer : String) -> Array[String]? {
   if pointer == "#" {
     return Some([])
@@ -81,15 +82,66 @@ fn parse_local_ref(pointer : String) -> Array[String]? {
   while i < chars.length() {
     let c = chars[i]
     if c == '/' {
-      tokens.push(unescape_pointer_token(cur.to_string()))
+      tokens.push(unescape_pointer_token(percent_decode(cur.to_string())))
       cur.reset()
     } else {
       cur.write_char(c)
     }
     i += 1
   }
-  tokens.push(unescape_pointer_token(cur.to_string()))
+  tokens.push(unescape_pointer_token(percent_decode(cur.to_string())))
   Some(tokens)
+}
+
+///|
+fn hex_val(c : Char) -> Int? {
+  if c >= '0' && c <= '9' {
+    Some(c.to_int() - '0'.to_int())
+  } else if c >= 'a' && c <= 'f' {
+    Some(c.to_int() - 'a'.to_int() + 10)
+  } else if c >= 'A' && c <= 'F' {
+    Some(c.to_int() - 'A'.to_int() + 10)
+  } else {
+    None
+  }
+}
+
+///|
+/// URI fragment 的百分号解码（`%25` -> `%` 等）。
+/// 仅处理 ASCII 范围的字节，非法序列原样保留。
+fn percent_decode(t : String) -> String {
+  let chars = t.to_array()
+  let b = StringBuilder::new()
+  let mut i = 0
+  let n = chars.length()
+  while i < n {
+    let c = chars[i]
+    if c == '%' && i + 2 < n {
+      let h = hex_val(chars[i + 1])
+      let l = hex_val(chars[i + 2])
+      match (h, l) {
+        (Some(hh), Some(ll)) =>
+          match (hh * 16 + ll).to_char() {
+            Some(decoded) => {
+              b.write_char(decoded)
+              i += 3
+            }
+            None => {
+              b.write_char(c)
+              i += 1
+            }
+          }
+        _ => {
+          b.write_char(c)
+          i += 1
+        }
+      }
+    } else {
+      b.write_char(c)
+      i += 1
+    }
+  }
+  b.to_string()
 }
 
 ///|
@@ -117,11 +169,10 @@ fn parse_pointer_index(s : String) -> Int? {
 }
 
 ///|
-/// 按 token 列表在文档中取值。
+/// 按 token 列表在文档中取值。token 已在 `parse_local_ref` 中解码完毕。
 fn resolve_pointer(root : Json, tokens : Array[String]) -> Json? {
   let mut cur : Json? = Some(root)
-  for t in tokens {
-    let key = unescape_pointer_token(t)
+  for key in tokens {
     let next : Json? = match cur {
       Some(Object(m)) => m.get(key)
       Some(Array(a)) =>

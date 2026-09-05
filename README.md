@@ -74,17 +74,30 @@ for e in errors {
 
 | 类别 | 关键词 |
 |---|---|
-| 核心 | `type`（含数组形式）、`enum`、`const`、`$ref`（本地指针，支持递归）、`$defs`、布尔模式 `true`/`false` |
-| 数值 | `minimum`、`maximum`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf` |
-| 字符串 | `minLength`、`maxLength`、`format`（默认 annotation；`assert_format` 开启后断言 email / uuid / ipv4） |
+| 核心 | `type`（含数组形式）、`enum`、`const`、`$ref`（本地 JSON Pointer，支持递归）、`$defs`、布尔模式 `true`/`false` |
+| 数值 | `minimum`、`maximum`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`（浮点容差判定） |
+| 字符串 | `minLength`、`maxLength`（按 Unicode 码点计数）、`pattern`（基于 core 正则引擎）、`format`（默认 annotation；`assert_format` 开启后断言 email / uuid / ipv4） |
 | 数组 | `items`、`prefixItems`、`minItems`、`maxItems`、`uniqueItems`、`contains`、`minContains`、`maxContains` |
-| 对象 | `properties`、`required`、`additionalProperties`、`propertyNames`、`minProperties`、`maxProperties`、`dependentRequired`、`dependentSchemas` |
+| 对象 | `properties`、`patternProperties`、`required`、`additionalProperties`、`propertyNames`、`minProperties`、`maxProperties`、`dependentRequired`、`dependentSchemas` |
 | 组合 | `allOf`、`anyOf`、`oneOf`、`not`、`if`/`then`/`else` |
 | 编译选项 | `strict`（未知关键词报错，`x-` 前缀扩展放行）、`assert_format` |
 
-**暂不支持**（编译期明确报错而非静默跳过）：`pattern` / `patternProperties`（需要正则引擎）、远程 `$ref`、`$dynamicRef`。draft-07 的 `items` 数组形式会给出迁移到 `prefixItems` 的提示。
+**暂不支持**（编译期明确报错而非静默跳过）：远程 `$ref`（http/https）、命名 fragment 引用（`$anchor` / `$dynamicRef`）、子模式中的 `$id`（base URI 变更）、`unevaluatedProperties` / `unevaluatedItems`。draft-07 的 `items` 数组形式会给出迁移到 `prefixItems` 的提示。
 
-注：`multipleOf` 使用 IEEE 754 浮点求余，`9.99 % 0.01` 这类十进制直觉场景可能因浮点精度判定失败（ajv 亦如此），对精度敏感的场景请换算为整数倍数。
+注：`multipleOf` 使用浮点商的相对容差判定，`0.0075 % 0.0001` 这类十进制直觉场景不会因 IEEE 754 精度噪声误判。
+
+## 官方一致性测试
+
+内置 [JSON-Schema-Test-Suite](https://github.com/json-schema-org/JSON-Schema-Test-Suite) draft2020-12 全量测试（`cmd/conformance/suite_data.mbt`，由脚本生成），运行 `moon run cmd/conformance`：
+
+```
+groups: 384 (compile-rejected: 133)
+pass: 974  fail: 1  skip: 326
+pass rate (of judged 975): 99.90%
+```
+
+- **skip (326)**：模式使用了引擎暂不支持的关键词（`unevaluated*`、`$dynamicRef`、远程引用等），strict 模式编译期整组拒绝，透明计入而非伪装成失败
+- **fail (1)**：自定义元场景表（vocabulary）语义——v0 不做元模式感知，属已知边界
 
 ## 与 ajv / zod 的 API 对应
 
@@ -115,8 +128,9 @@ moon fmt && moon info       # 格式化 + 更新包接口
 
 ## 路线图
 
-- [x] **W1** 引擎核心：编译器 + 校验器 + 错误模型 + `$ref` 惰性解析（当前，22 个测试，双目标通过）
-- [ ] **W2** 官方 [JSON-Schema-Test-Suite](https://github.com/json-schema-org/JSON-Schema-Test-Suite) 接入与跑分；内置轻量正则引擎支持 `pattern` / `patternProperties`；错误消息 i18n（中/英）
+- [x] **W1** 引擎核心：编译器 + 校验器 + 错误模型 + `$ref` 惰性解析（双目标测试通过）
+- [x] **W2** 官方 JSON-Schema-Test-Suite 接入与跑分（**974/975 判定通过，99.90%**）；`pattern` / `patternProperties`（基于 core 正则引擎）；整数解析溢出修复（core 上游 bug workaround）
+- [ ] **W2 剩余** 错误消息 i18n（中/英）
 - [ ] **W3** 跨字段动态规则 DSL（如 `rule: "end_date > start_date"`，表达式编译为校验器）；quickcheck 性质测试（builder ⇄ JSON Schema 文档 roundtrip）
 - [ ] **W4** WASM Playground（浏览器实时校验）；对 ajv / zod 的基准测试报告；发布到 mooncakes.io
 

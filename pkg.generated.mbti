@@ -18,6 +18,9 @@ pub fn validate_to_string(@schema.Schema, Json) -> String
 // Types and methods
 
 // Type aliases
+pub using @schema {type Schema}
+
+pub using @schema {type ValidationError}
 
 // Traits
 

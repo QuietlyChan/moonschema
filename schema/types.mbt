@@ -166,6 +166,7 @@ priv struct Keywords {
   mut min_length : Int?
   mut max_length : Int?
   mut format : String?
+  mut pattern : (@string.Regex, String)?
   // 数组
   mut min_items : Int?
   mut max_items : Int?
@@ -180,6 +181,7 @@ priv struct Keywords {
   mut max_properties : Int?
   mut required : Array[String]?
   mut properties : Map[String, Schema]?
+  mut pattern_properties : Array[(@string.Regex, String, Schema)]?
   mut property_names : Schema?
   mut additional_closed : Bool?
   mut additional : Schema?
@@ -210,6 +212,7 @@ fn Keywords::empty() -> Keywords {
     min_length: None,
     max_length: None,
     format: None,
+    pattern: None,
     min_items: None,
     max_items: None,
     unique_items: None,
@@ -222,6 +225,7 @@ fn Keywords::empty() -> Keywords {
     max_properties: None,
     required: None,
     properties: None,
+    pattern_properties: None,
     property_names: None,
     additional_closed: None,
     additional: None,
@@ -266,4 +270,54 @@ pub fn Schema::validate(
 /// 便捷方法：实例是否通过校验。
 pub fn Schema::check(self : Schema, instance : Json) -> Bool {
   self.validate(instance).is_empty()
+}
+
+///|
+/// 按 JSON Schema 语义的深度相等：数值按值比较（`1` 与 `1.0` 相等），
+/// 不依赖解析器保留的字面表示（repr）。
+fn json_eq(a : Json, b : Json) -> Bool {
+  match (a, b) {
+    (Null, Null) => true
+    (True, True) => true
+    (False, False) => true
+    (Number(x, ..), Number(y, ..)) => x == y
+    (String(x), String(y)) => x == y
+    (Array(x), Array(y)) =>
+      if x.length() != y.length() {
+        false
+      } else {
+        let mut same = true
+        for i in 0..<x.length() {
+          if !json_eq(x[i], y[i]) {
+            same = false
+          }
+        }
+        same
+      }
+    (Object(x), Object(y)) =>
+      if x.length() != y.length() {
+        false
+      } else {
+        let mut same = true
+        for k, v in x {
+          match y.get(k) {
+            Some(v2) => if !json_eq(v, v2) { same = false }
+            None => same = false
+          }
+        }
+        same
+      }
+    _ => false
+  }
+}
+
+///|
+/// 字符串的 Unicode 码点数。`minLength`/`maxLength` 的规范计量单位是
+/// 码点而非 UTF-16 code unit（例如 emoji 是 1 个码点、2 个 UTF-16 单元）。
+fn str_code_points(s : String) -> Int {
+  let mut n = 0
+  for _c in s {
+    n += 1
+  }
+  n
 }
