@@ -288,7 +288,7 @@ pub fn Schema::validate(
   instance : Json,
 ) -> Array[ValidationError] {
   let errors : Array[ValidationError] = []
-  let _ = validate_node(self, self.node, instance, [], ["#"], errors)
+  let _ = validate_node(self, self.node, instance, [], [PTKey("#")], errors)
   errors
 }
 

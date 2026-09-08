@@ -1,15 +1,15 @@
 ///|
 fn err(
   keyword : String,
-  ipath : Array[String],
-  spath : Array[String],
+  ipath : Array[PathTok],
+  spath : Array[PathTok],
   message : String,
 ) -> ValidationError {
   {
     keyword,
-    instance_path: instance_pointer(ipath),
+    instance_path: render_instance_pointer(ipath),
     // ajv 风格：schema_path 以触发错误的关键词名结尾，如 "#/properties/age/minimum"
-    schema_path: "\{schema_pointer(spath)}/\{escape_pointer_token(keyword)}",
+    schema_path: "\{render_schema_pointer(spath)}/\{escape_pointer_token(keyword)}",
     message,
   }
 }
@@ -18,14 +18,14 @@ fn err(
 /// `false schema` 等特殊情况：关键词名不是模式里的路径段。
 fn err_no_leaf(
   keyword : String,
-  ipath : Array[String],
-  spath : Array[String],
+  ipath : Array[PathTok],
+  spath : Array[PathTok],
   message : String,
 ) -> ValidationError {
   {
     keyword,
-    instance_path: instance_pointer(ipath),
-    schema_path: schema_pointer(spath),
+    instance_path: render_instance_pointer(ipath),
+    schema_path: render_schema_pointer(spath),
     message,
   }
 }
@@ -56,8 +56,8 @@ fn validate_node(
   root : Schema,
   node : Node,
   v : Json,
-  ipath : Array[String],
-  spath : Array[String],
+  ipath : Array[PathTok],
+  spath : Array[PathTok],
   errors : Array[ValidationError],
 ) -> Bool {
   match node {
@@ -92,11 +92,12 @@ fn get_or_compile_ref(root : Schema, pointer : String) -> Schema? {
         Some(tokens) =>
           match resolve_pointer(ctx.root, tokens) {
             Some(target) => {
-              let spath : Array[String] = ["#"]
+              // 编译侧路径仍是字符串栈（与 compile_node 的签名一致）
+              let cpath : Array[String] = ["#"]
               for t in tokens {
-                spath.push(t)
+                cpath.push(t)
               }
-              let node : Node? = Some(compile_node(target, ctx, spath)) catch {
+              let node : Node? = Some(compile_node(target, ctx, cpath)) catch {
                 _ => None
               }
               match node {
@@ -120,8 +121,8 @@ fn validate_keywords(
   root : Schema,
   kw : Keywords,
   v : Json,
-  ipath : Array[String],
-  spath : Array[String],
+  ipath : Array[PathTok],
+  spath : Array[PathTok],
   errors : Array[ValidationError],
 ) -> Bool {
   let start_len = errors.length()
@@ -454,18 +455,18 @@ fn validate_keywords(
       None => 0
     }
     for i in 0..<arr.length() {
-      ipath.push(i.to_string())
+      ipath.push(PTIndex(i))
       if i < pcount {
         let p = kw.prefix_items.unwrap()[i]
-        spath.push("prefixItems")
-        spath.push(i.to_string())
+        spath.push(PTKey("prefixItems"))
+        spath.push(PTIndex(i))
         let _ = validate_node(root, p.node, arr[i], ipath, spath, errors)
         ignore(spath.pop())
         ignore(spath.pop())
       } else {
         match kw.items {
           Some(it) => {
-            spath.push("items")
+            spath.push(PTKey("items"))
             let _ = validate_node(root, it.node, arr[i], ipath, spath, errors)
             ignore(spath.pop())
           }
@@ -480,8 +481,8 @@ fn validate_keywords(
         let mut count = 0
         for i in 0..<arr.length() {
           let sub : Array[ValidationError] = []
-          ipath.push(i.to_string())
-          spath.push("contains")
+          ipath.push(PTIndex(i))
+          spath.push(PTKey("contains"))
           let ok = validate_node(root, cs.node, arr[i], ipath, spath, sub)
           ignore(spath.pop())
           ignore(ipath.pop())
@@ -588,9 +589,9 @@ fn validate_keywords(
         for k, sub in props {
           match obj.get(k) {
             Some(pv) => {
-              ipath.push(k)
-              spath.push("properties")
-              spath.push(k)
+              ipath.push(PTKey(k))
+              spath.push(PTKey("properties"))
+              spath.push(PTKey(k))
               let _ = validate_node(root, sub.node, pv, ipath, spath, errors)
               ignore(spath.pop())
               ignore(spath.pop())
@@ -609,9 +610,9 @@ fn validate_keywords(
             let pair = pairs[i]
             match pair.0.execute(k) {
               Some(_) => {
-                ipath.push(k)
-                spath.push("patternProperties")
-                spath.push(pair.1)
+                ipath.push(PTKey(k))
+                spath.push(PTKey("patternProperties"))
+                spath.push(PTKey(pair.1))
                 let _ = validate_node(
                   root,
                   pair.2.node,
@@ -654,8 +655,8 @@ fn validate_keywords(
       Some(add) =>
         for k, ov in obj {
           if !key_is_known(kw, k) {
-            ipath.push(k)
-            spath.push("additionalProperties")
+            ipath.push(PTKey(k))
+            spath.push(PTKey("additionalProperties"))
             let _ = validate_node(root, add.node, ov, ipath, spath, errors)
             ignore(spath.pop())
             ignore(ipath.pop())
@@ -666,8 +667,8 @@ fn validate_keywords(
     match kw.property_names {
       Some(pn) =>
         for k, _ov in obj {
-          ipath.push(k)
-          spath.push("propertyNames")
+          ipath.push(PTKey(k))
+          spath.push(PTKey("propertyNames"))
           let _ = validate_node(
             root,
             pn.node,
@@ -710,8 +711,8 @@ fn validate_keywords(
       Some(m) =>
         for k, ds in m {
           if obj.contains(k) {
-            spath.push("dependentSchemas")
-            spath.push(k)
+            spath.push(PTKey("dependentSchemas"))
+            spath.push(PTKey(k))
             let _ = validate_node(root, ds.node, v, ipath, spath, errors)
             ignore(spath.pop())
             ignore(spath.pop())
@@ -723,8 +724,8 @@ fn validate_keywords(
   match kw.all_of {
     Some(list) =>
       for i in 0..<list.length() {
-        spath.push("allOf")
-        spath.push(i.to_string())
+        spath.push(PTKey("allOf"))
+        spath.push(PTIndex(i))
         let _ = validate_node(root, list[i].node, v, ipath, spath, errors)
         ignore(spath.pop())
         ignore(spath.pop())
@@ -736,8 +737,8 @@ fn validate_keywords(
       let mut matched = false
       for i in 0..<list.length() {
         let sub : Array[ValidationError] = []
-        spath.push("anyOf")
-        spath.push(i.to_string())
+        spath.push(PTKey("anyOf"))
+        spath.push(PTIndex(i))
         let ok = validate_node(root, list[i].node, v, ipath, spath, sub)
         ignore(spath.pop())
         ignore(spath.pop())
@@ -765,8 +766,8 @@ fn validate_keywords(
       let mut pass_count = 0
       for i in 0..<list.length() {
         let sub : Array[ValidationError] = []
-        spath.push("oneOf")
-        spath.push(i.to_string())
+        spath.push(PTKey("oneOf"))
+        spath.push(PTIndex(i))
         let ok = validate_node(root, list[i].node, v, ipath, spath, sub)
         ignore(spath.pop())
         ignore(spath.pop())
@@ -794,7 +795,7 @@ fn validate_keywords(
   match kw.not_ {
     Some(n) => {
       let sub : Array[ValidationError] = []
-      spath.push("not")
+      spath.push(PTKey("not"))
       let ok = validate_node(root, n.node, v, ipath, spath, sub)
       ignore(spath.pop())
       if ok {
@@ -813,13 +814,13 @@ fn validate_keywords(
   match kw.if_ {
     Some(i) => {
       let sub : Array[ValidationError] = []
-      spath.push("if")
+      spath.push(PTKey("if"))
       let ok = validate_node(root, i.node, v, ipath, spath, sub)
       ignore(spath.pop())
       if ok {
         match kw.then_ {
           Some(t) => {
-            spath.push("then")
+            spath.push(PTKey("then"))
             let _ = validate_node(root, t.node, v, ipath, spath, errors)
             ignore(spath.pop())
           }
@@ -828,7 +829,7 @@ fn validate_keywords(
       } else {
         match kw.else_ {
           Some(e) => {
-            spath.push("else")
+            spath.push(PTKey("else"))
             let _ = validate_node(root, e.node, v, ipath, spath, errors)
             ignore(spath.pop())
           }
@@ -845,8 +846,8 @@ fn validate_keywords(
         Some(srcs) =>
           for i in 0..<exprs.length() {
             if !@rules.rule_holds(exprs[i], v) {
-              spath.push("x-rules")
-              spath.push(i.to_string())
+              spath.push(PTKey("x-rules"))
+              spath.push(PTIndex(i))
               errors.push(
                 err_no_leaf(
                   "x-rules",

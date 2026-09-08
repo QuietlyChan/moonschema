@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/core/encoding/utf8" @utf8,
+}
+
+options(
+  "link": {
+    "wasm-gc": {
+      "exports": ["add", "in_write8", "in_commit", "out_read8"],
+    },
+  },
+)

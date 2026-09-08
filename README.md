@@ -232,3 +232,13 @@ moon fmt && moon info       # 格式化 + 更新包接口
 ## License
 
 [Apache-2.0](./LICENSE)
+
+## 附：wasm-gc 字符串边界协议（已验证）
+
+wasm-gc 的 `String` 编译为自定义 GC 结构，对 JS 不透明；`extern "js"` 在该后端不受支持。跨边界传输文本的可行方案是**字节块协议**（`playground/wasm-gc-spike/` 内含端到端验证代码，支持中文/emoji 多字节）：
+
+1. JS `TextEncoder` → UTF-8 字节 → 按 8 字节打包 `i64` 分次写入 wasm 侧缓冲
+2. `commit(len)` 触发 wasm 侧 `@encoding/utf8` 解码与校验，结果写回输出缓冲
+3. JS 分块读回 → `TextDecoder` 解码
+
+三条硬教训：导出函数**禁止 `raise`**（签名会变成不透明的 GC Result 对象）；`--output-wat` 与 `.wasm` 产物可能失同步；导出配置变更后需完整重建。

@@ -39,17 +39,6 @@ fn unescape_pointer_token(t : String) -> String {
 }
 
 ///|
-/// 实例路径渲染为 JSON Pointer；根为空字符串。
-fn instance_pointer(path : Array[String]) -> String {
-  let b = StringBuilder()
-  for t in path {
-    b.write_string("/")
-    b.write_string(escape_pointer_token(t))
-  }
-  b.to_string()
-}
-
-///|
 /// 模式路径渲染为以 `#` 开头的 JSON Pointer 形式。
 fn schema_pointer(path : Array[String]) -> String {
   let b = StringBuilder()
@@ -185,4 +174,44 @@ fn resolve_pointer(root : Json, tokens : Array[String]) -> Json? {
     cur = next
   }
   cur
+}
+
+///|
+/// 校验期路径栈的 token：键复用既有字符串，下标存 Int，
+/// 错误发生时才渲染为 JSON Pointer 文本（消除 happy path 的字符串分配）。
+priv enum PathTok {
+  PTKey(String)
+  PTIndex(Int)
+}
+
+///|
+fn render_instance_pointer(toks : Array[PathTok]) -> String {
+  let b = StringBuilder()
+  for i in 0..<toks.length() {
+    b.write_string("/")
+    match toks[i] {
+      PTKey(k) => b.write_string(escape_pointer_token(k))
+      PTIndex(n) => b.write_string(n.to_string())
+    }
+  }
+  b.to_string()
+}
+
+///|
+fn render_schema_pointer(toks : Array[PathTok]) -> String {
+  let b = StringBuilder()
+  for i in 0..<toks.length() {
+    if i == 0 {
+      b.write_string("#")
+    } else {
+      b.write_string("/")
+    }
+    if i > 0 {
+      match toks[i] {
+        PTKey(k) => b.write_string(escape_pointer_token(k))
+        PTIndex(n) => b.write_string(n.to_string())
+      }
+    }
+  }
+  b.to_string()
 }
