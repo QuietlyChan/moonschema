@@ -5,63 +5,133 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>moonschema playground — JSON Schema 校验（MoonBit → JS）</title>
 <style>
-  :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
+  :root {
+    --bg: #ffffff;
+    --fg: #171717;
+    --muted: #6b6b6b;
+    --border: #eaeaea;
+    --hover: #fafafa;
+  }
+  html, body { background: var(--bg); }
   body {
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    margin: 0; background: #f6f7fb; color: #1c2333;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      "PingFang SC", "Microsoft YaHei", sans-serif;
+    margin: 0; color: var(--fg);
+    -webkit-font-smoothing: antialiased;
   }
+  a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px;
+      text-decoration-color: #c9c9c9; }
+  a:hover { text-decoration-color: var(--fg); }
+
   header {
-    padding: 18px 24px; background: linear-gradient(90deg, #4f46e5, #9333ea);
-    color: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; flex-wrap: wrap;
   }
-  header h1 { margin: 0 0 4px; font-size: 20px; }
-  header p { margin: 0; font-size: 13px; opacity: .85; }
-  header code { background: rgba(255,255,255,.18); padding: 1px 6px; border-radius: 4px; }
-  main { max-width: 1180px; margin: 0 auto; padding: 16px 24px 40px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  header h1 {
+    margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  header h1 .dot { display: inline-block; width: 8px; height: 8px;
+    background: var(--fg); border-radius: 2px; margin-right: 8px;
+    vertical-align: 1px; }
+  header p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+  header code {
+    font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+    background: var(--hover); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .gh-link { font-size: 13px; color: var(--muted); white-space: nowrap;
+    padding-top: 2px; }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 48px; }
+
+  .toolbar {
+    display: flex; gap: 10px; align-items: center;
+    margin: 0 0 14px; flex-wrap: wrap;
+  }
+  .toolbar label { font-size: 13px; color: var(--muted); }
+  select {
+    font-size: 13px; padding: 6px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+  }
+  select:focus { outline: none; border-color: var(--fg); }
+  button {
+    background: var(--fg); color: #fff;
+    border: 1px solid var(--fg); border-radius: 6px;
+    padding: 6px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  button:hover { background: #383838; }
+  .meta { font-size: 12px; color: var(--muted); margin-left: auto;
+    font-family: ui-monospace, Consolas, monospace; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-  .panel { background: #fff; border: 1px solid #e3e6f0; border-radius: 10px; padding: 12px; }
-  .panel h2 { margin: 0 0 8px; font-size: 14px; color: #475069; }
+  .panel { border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .panel h2 {
+    margin: 0 0 10px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  }
   textarea {
     width: 100%; height: 300px; resize: vertical;
-    font-family: Consolas, "Courier New", monospace; font-size: 13px;
-    border: 1px solid #d6dbea; border-radius: 8px; padding: 10px;
-    background: #fbfcff; color: inherit;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px; line-height: 1.55;
+    border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+    background: var(--bg); color: var(--fg);
   }
-  textarea:focus { outline: 2px solid #6366f1; border-color: transparent; }
-  .toolbar { display: flex; gap: 10px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
-  button {
-    background: #4f46e5; color: #fff; border: 0; border-radius: 8px;
-    padding: 8px 18px; font-size: 14px; cursor: pointer;
+  textarea:focus { outline: none; border-color: var(--fg); }
+
+  .spacer { height: 16px; }
+  #banner {
+    padding: 11px 14px; border-radius: 6px; font-size: 13.5px;
+    font-weight: 500; margin-bottom: 14px; display: none;
+    border: 1px solid var(--border);
   }
-  button:hover { background: #4338ca; }
-  select { padding: 7px 10px; border-radius: 8px; border: 1px solid #d6dbea; font-size: 13px; }
-  .meta { font-size: 12px; color: #8a91a8; margin-left: auto; }
-  #banner { padding: 12px 16px; border-radius: 10px; font-weight: 600; margin-bottom: 12px; display: none; }
-  .ok    { background: #e7f8ef; color: #157347; border: 1px solid #b6e6cd; }
-  .fail  { background: #fdecec; color: #b02a37; border: 1px solid #f5c2c7; }
-  .warn  { background: #fff7e0; color: #8a6d00; border: 1px solid #f1e0a6; font-weight: 400; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff;
-          border: 1px solid #e3e6f0; border-radius: 10px; overflow: hidden; }
-  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eef0f7; vertical-align: top; }
-  th { background: #f2f4fb; color: #475069; font-weight: 600; }
-  td.path { font-family: Consolas, monospace; color: #9333ea; }
-  td.kw { font-family: Consolas, monospace; color: #b45309; }
+  #banner.ok {
+    background: #f0fdf4; color: #15803d; border-color: #bbf7d0;
+  }
+  #banner.fail {
+    background: #fef2f2; color: #dc2626; border-color: #fecaca;
+  }
+  #banner.warn {
+    background: var(--hover); color: var(--fg); font-weight: 400;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px;
+    border-bottom: 1px solid var(--border); vertical-align: top; }
+  th {
+    background: var(--hover); color: var(--muted); font-weight: 500;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  }
   tr:last-child td { border-bottom: 0; }
-  footer { text-align: center; font-size: 12px; color: #8a91a8; padding: 20px; }
-  footer a { color: #4f46e5; }
+  td.path, td.kw {
+    font-family: ui-monospace, Consolas, monospace; font-size: 12.5px;
+  }
+  td.path { color: var(--muted); }
+  td.kw { color: var(--fg); }
+
+  footer {
+    border-top: 1px solid var(--border);
+    text-align: center; font-size: 12.5px; color: var(--muted);
+    padding: 18px;
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>moonschema playground</h1>
-  <p>纯 MoonBit 实现的 JSON Schema 2020-12 校验引擎，编译到 JS（ESM）在浏览器直接运行 ·
-     引擎代码 <code>playground/api.mbt</code> · 支持 <code>x-rules</code> 跨字段规则 · 中英双语错误</p>
+  <div>
+    <h1><span class="dot"></span>moonschema playground</h1>
+    <p>纯 MoonBit 实现的 JSON Schema 2020-12 校验引擎，编译为 JS 在浏览器运行 ·
+       支持 <code>x-rules</code> 跨字段规则 · 中英双语错误</p>
+  </div>
+  <div class="gh-link"><a href="https://github.com/QuietlyChan/moonschema">GitHub ↗</a></div>
 </header>
 <main>
   <div class="toolbar">
-    <label>示例：</label>
+    <label>示例</label>
     <select id="preset">
       <option value="user">用户资料（基础关键词）</option>
       <option value="order">订单（x-rules 跨字段规则）</option>
@@ -80,12 +150,12 @@
       <textarea id="data" spellcheck="false"></textarea>
     </div>
   </div>
-  <div style="height:14px"></div>
+  <div class="spacer"></div>
   <div id="banner"></div>
   <div id="errors"></div>
 </main>
 <footer>
-  moonschema — <a href="https://github.com/QuietlyChan/moonschema">GitHub</a> ·
+  moonschema · <a href="https://github.com/QuietlyChan/moonschema">GitHub</a> ·
   Apache-2.0 · MoonBit OSC2026
 </footer>
 <script type="module">
@@ -193,7 +263,7 @@ for (const id of ['schema', 'data']) {
   $(id).addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(run, 400) })
 }
 
-$('ver').textContent = 'engine v' + version()
+$('ver').textContent = 'v' + version()
 $('preset').dispatchEvent(new Event('change'))
 </script>
 </body>

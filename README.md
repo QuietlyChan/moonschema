@@ -100,8 +100,9 @@ cd playground/web && python -m http.server 8080   # 或 npx serve .
 | `compile_schema(schemaText) -> handle` | ajv 式编译一次（句柄，失败 -1） |
 | `check_with(handle, dataText) -> bool` | 热路径布尔判定 |
 | `validate_with(handle, dataText) -> string` | 校验并返回完整错误 JSON |
+| `version()` | 版本号，供页面展示 |
 
-> 关于 wasm-gc：引擎已验证可在 wasm-gc 目标编译并导出数值函数（`link.wasm-gc.exports`，Node 24 `WebAssembly.instantiate` 实测通过）；但字符串在 wasm-gc 边界是 GC 对象，对 JS 不透明，需 JS-string-builtins 方案——Playground 因此选择字符串原生互通的 JS 后端。
+> 关于 wasm-gc：引擎已验证可在 wasm-gc 目标编译并导出数值函数（`link.wasm-gc.exports`，Node 24 `WebAssembly.instantiate` 实测通过）；但字符串在 wasm-gc 边界是 GC 对象，对 JS 不透明，跨边界传输需走字节块协议（已验证，见文末附录）——Playground 因此选择字符串原生互通的 JS 后端。
 
 ## 基准测试（vs ajv / zod）
 
@@ -109,14 +110,14 @@ Node 24，订单式嵌套 schema，每轮 5000 实例 × 7 轮取最优（`cd be
 
 | 实现 / 工作负载 | ops/s | µs per validate |
 |---|---|---|
-| ajv valid (预解析对象) | 3,066,168 | 0.33 |
-| zod valid (预解析对象) | 456,988 | 2.19 |
-| ajv valid (+JSON.parse) | 400,898 | 2.49 |
-| moonschema valid (字符串入口) | 89,177 | 11.21 |
-| zod invalid (预解析对象) | 155,439 | 6.43 |
-| moonschema invalid (字符串+错误报告) | 61,078 | 16.37 |
+| ajv valid (预解析对象) | 3,079,576 | 0.32 |
+| zod valid (预解析对象) | 407,807 | 2.45 |
+| ajv valid (+JSON.parse) | 430,615 | 2.32 |
+| moonschema valid (字符串入口) | 88,290 | 11.33 |
+| zod invalid (预解析对象) | 157,370 | 6.35 |
+| moonschema invalid (字符串+错误报告) | 59,050 | 16.93 |
 
-**编译期一次性成本**：moonschema `compile_schema` **6.4ms** vs ajv `compile` 49.9ms——**快约 8 倍**（树编译 vs 代码生成）。吞吐方面 ajv 的代码生成在 V8 上仍是天花板；moonschema 当前为树解释式执行，字符串入口口径与 zod+parse 同量级，优化空间见路线图。
+**编译期一次性成本**：moonschema `compile_schema` **7.1ms** vs ajv `compile` 65.1ms——**快约 9 倍**（树编译 vs 代码生成）。吞吐方面 ajv 的代码生成在 V8 上仍是天花板；moonschema 当前为树解释式执行，字符串入口口径与 zod+parse 同量级，优化空间见路线图。
 
 ## 性质测试（roundtrip）
 
@@ -235,8 +236,8 @@ moon fmt && moon info       # 格式化 + 更新包接口
 - [x] **W1** 引擎核心：编译器 + 校验器 + 错误模型 + `$ref` 惰性解析（双目标测试通过）
 - [x] **W2** 官方 JSON-Schema-Test-Suite 接入与跑分（**974/975 判定通过，99.90%**）；`pattern` / `patternProperties`（基于 core 正则引擎）；整数解析溢出修复（core 上游 bug workaround）
 - [x] **W3** 跨字段动态规则 DSL（`x-rules` + builder `.satisfy()`，编译期语法检查）；错误消息 i18n（中/英）；quickcheck 式 roundtrip 性质测试（种子化随机实例 ×1100）
-- [x] **W4** Node 基准测试报告（vs ajv/zod，编译期快 8×）；浏览器 Playground（JS 后端 ESM 导出，含宿主集成 API）
-- [ ] **后续** wasm-gc 字符串边界（JS-string-builtins）；校验吞吐优化（错误结构/查找路径）；mooncakes 发布
+- [x] **W4** Node 基准测试报告（vs ajv/zod，编译期快 9×）；浏览器 Playground（JS 后端 ESM 导出，含宿主集成 API）
+- [ ] **后续** wasm-gc 字符串边界接入（字节块协议已验证，见附录）；校验吞吐优化（错误结构/查找路径）；mooncakes 发布
 
 ## License
 
@@ -247,7 +248,7 @@ moon fmt && moon info       # 格式化 + 更新包接口
 wasm-gc 的 `String` 编译为自定义 GC 结构，对 JS 不透明；`extern "js"` 在该后端不受支持。跨边界传输文本的可行方案是**字节块协议**（`playground/wasm-gc-spike/` 内含端到端验证代码，支持中文/emoji 多字节）：
 
 1. JS `TextEncoder` → UTF-8 字节 → 按 8 字节打包 `i64` 分次写入 wasm 侧缓冲
-2. `commit(len)` 触发 wasm 侧 `@encoding/utf8` 解码与校验，结果写回输出缓冲
+2. `in_commit(len)` 触发 wasm 侧 `@encoding/utf8` 解码与校验，结果写回输出缓冲
 3. JS 分块读回 → `TextDecoder` 解码
 
 三条硬教训：导出函数**禁止 `raise`**（签名会变成不透明的 GC Result 对象）；`--output-wat` 与 `.wasm` 产物可能失同步；导出配置变更后需完整重建。
