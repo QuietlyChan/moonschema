@@ -79,7 +79,7 @@ pub(all) struct ValidationError {
 ///|
 /// 把错误列表渲染为多行文本，适合日志输出与测试快照。
 pub fn summarize(errors : Array[ValidationError]) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut first = true
   for e in errors {
     if !first {
@@ -150,7 +150,7 @@ pub fn CompileOptions::new(
   assert_format? : Bool = false,
   locale? : Locale = EN,
 ) -> CompileOptions {
-  { strict, assert_format, locale }
+  { strict, assert_format, locale, }
 }
 
 ///|

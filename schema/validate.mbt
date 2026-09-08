@@ -101,7 +101,7 @@ fn get_or_compile_ref(root : Schema, pointer : String) -> Schema? {
               }
               match node {
                 Some(n) => {
-                  let s : Schema = { node: n, ctx }
+                  let s : Schema = { node: n, ctx, }
                   ctx.cache[pointer] = s
                   Some(s)
                 }
@@ -158,7 +158,7 @@ fn validate_keywords(
         }
       }
       if !ok {
-        let b = StringBuilder::new()
+        let b = StringBuilder()
         for i in 0..<ts.length() {
           if i > 0 {
             if i == ts.length() - 1 {

@@ -5,28 +5,31 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Install MoonBit
+      - name: Set up MoonBit
         run: |
-          # 固定版本与开发环境一致，保证 moon fmt 输出确定性
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s "0.1.20260713"
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
-      - name: Verify installation
+      - name: Show toolchain version
         run: moon version --all
 
-      - name: Check
-        run: moon check
+      - name: Resolve dependencies
+        run: moon update
 
-      - name: Format
-        run: |
-          moon fmt
-          git diff --exit-code
+      - name: Check formatting
+        run: moon fmt --check
+
+      - name: Check packages
+        run: moon check
 
       - name: Test (native)
         run: moon test

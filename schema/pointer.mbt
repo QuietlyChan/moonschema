@@ -1,7 +1,7 @@
 ///|
 /// JSON Pointer（RFC 6901）token 转义：`~` → `~0`，`/` → `~1`。
 fn escape_pointer_token(t : String) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   for c in t {
     if c == '~' {
       b.write_string("~0")
@@ -16,7 +16,7 @@ fn escape_pointer_token(t : String) -> String {
 
 ///|
 fn unescape_pointer_token(t : String) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut pending_escape = false
   for c in t {
     if pending_escape {
@@ -41,7 +41,7 @@ fn unescape_pointer_token(t : String) -> String {
 ///|
 /// 实例路径渲染为 JSON Pointer；根为空字符串。
 fn instance_pointer(path : Array[String]) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   for t in path {
     b.write_string("/")
     b.write_string(escape_pointer_token(t))
@@ -52,7 +52,7 @@ fn instance_pointer(path : Array[String]) -> String {
 ///|
 /// 模式路径渲染为以 `#` 开头的 JSON Pointer 形式。
 fn schema_pointer(path : Array[String]) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   for i in 0..<path.length() {
     if i == 0 {
       b.write_string(path[0])
@@ -77,7 +77,7 @@ fn parse_local_ref(pointer : String) -> Array[String]? {
     return None
   }
   let tokens : Array[String] = []
-  let cur = StringBuilder::new()
+  let cur = StringBuilder()
   let mut i = 2
   while i < chars.length() {
     let c = chars[i]
@@ -111,7 +111,7 @@ fn hex_val(c : Char) -> Int? {
 /// 仅处理 ASCII 范围的字节，非法序列原样保留。
 fn percent_decode(t : String) -> String {
   let chars = t.to_array()
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut i = 0
   let n = chars.length()
   while i < n {

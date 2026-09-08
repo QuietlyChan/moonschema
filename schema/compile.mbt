@@ -21,7 +21,7 @@ pub fn compile(
     cache: Map([], capacity=16),
   }
   let node = compile_node(schema, ctx, ["#"])
-  { node, ctx }
+  { node, ctx, }
 }
 
 ///|
@@ -31,7 +31,7 @@ fn compile_schema(
   spath : Array[String],
 ) -> Schema raise CompileError {
   let node = compile_node(v, ctx, spath)
-  { node, ctx }
+  { node, ctx, }
 }
 
 ///|

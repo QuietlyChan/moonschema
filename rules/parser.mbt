@@ -46,7 +46,7 @@ fn Parser::is_op(self : Parser, op : String) -> Bool {
 ///|
 /// 编译规则表达式；语法错误在编译期暴露（fail fast，与 strict 模式同哲学）。
 pub fn compile_expr(src : String) -> Expr raise ExprError {
-  let p : Parser = { toks: tokenize(src), pos: 0, src }
+  let p : Parser = { toks: tokenize(src), pos: 0, src, }
   let e = p.parse_or()
   if !(p.peek() is None) {
     raise p.err("unexpected trailing tokens")

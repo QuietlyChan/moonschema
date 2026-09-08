@@ -52,7 +52,7 @@ fn tokenize(src : String) -> Array[Token] raise ExprError {
     } else if c == '"' {
       // 字符串字面量，支持 \" \\ \n \t \r
       i += 1
-      let b = StringBuilder::new()
+      let b = StringBuilder()
       let mut closed = false
       while i < n {
         let sc = chars[i]
@@ -106,7 +106,7 @@ fn tokenize(src : String) -> Array[Token] raise ExprError {
     } else {
       // 运算符：两字符优先
       let two = if i + 1 < n {
-        let pair = StringBuilder::new()
+        let pair = StringBuilder()
         pair.write_char(c)
         pair.write_char(chars[i + 1])
         pair.to_string()
@@ -134,7 +134,7 @@ fn tokenize(src : String) -> Array[Token] raise ExprError {
         c == '[' ||
         c == ']' ||
         c == '.' {
-        let single = StringBuilder::new()
+        let single = StringBuilder()
         single.write_char(c)
         toks.push(TOp(single.to_string()))
         i += 1
