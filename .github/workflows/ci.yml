@@ -13,7 +13,8 @@ jobs:
 
       - name: Install MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          # 固定版本与开发环境一致，保证 moon fmt 输出确定性
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s "0.1.20260713"
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Verify installation
