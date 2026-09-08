@@ -346,3 +346,9 @@ pub fn SchemaBuilder::compile(
     options=@schema.CompileOptions::new(assert_format=true, locale~),
   )
 }
+
+///|
+/// 便捷入口：解析 JSON 实例文本（配合构建器校验时构造实例用）。
+pub fn parse_json(text : String) -> Json raise @json.ParseError {
+  @json.parse(text)
+}

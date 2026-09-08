@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>moonschema playground — JSON Schema 校验（MoonBit → JS）</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    margin: 0; background: #f6f7fb; color: #1c2333;
+  }
+  header {
+    padding: 18px 24px; background: linear-gradient(90deg, #4f46e5, #9333ea);
+    color: #fff;
+  }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; font-size: 13px; opacity: .85; }
+  header code { background: rgba(255,255,255,.18); padding: 1px 6px; border-radius: 4px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px 24px 40px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: #fff; border: 1px solid #e3e6f0; border-radius: 10px; padding: 12px; }
+  .panel h2 { margin: 0 0 8px; font-size: 14px; color: #475069; }
+  textarea {
+    width: 100%; height: 300px; resize: vertical;
+    font-family: Consolas, "Courier New", monospace; font-size: 13px;
+    border: 1px solid #d6dbea; border-radius: 8px; padding: 10px;
+    background: #fbfcff; color: inherit;
+  }
+  textarea:focus { outline: 2px solid #6366f1; border-color: transparent; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+  button {
+    background: #4f46e5; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 18px; font-size: 14px; cursor: pointer;
+  }
+  button:hover { background: #4338ca; }
+  select { padding: 7px 10px; border-radius: 8px; border: 1px solid #d6dbea; font-size: 13px; }
+  .meta { font-size: 12px; color: #8a91a8; margin-left: auto; }
+  #banner { padding: 12px 16px; border-radius: 10px; font-weight: 600; margin-bottom: 12px; display: none; }
+  .ok    { background: #e7f8ef; color: #157347; border: 1px solid #b6e6cd; }
+  .fail  { background: #fdecec; color: #b02a37; border: 1px solid #f5c2c7; }
+  .warn  { background: #fff7e0; color: #8a6d00; border: 1px solid #f1e0a6; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff;
+          border: 1px solid #e3e6f0; border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eef0f7; vertical-align: top; }
+  th { background: #f2f4fb; color: #475069; font-weight: 600; }
+  td.path { font-family: Consolas, monospace; color: #9333ea; }
+  td.kw { font-family: Consolas, monospace; color: #b45309; }
+  tr:last-child td { border-bottom: 0; }
+  footer { text-align: center; font-size: 12px; color: #8a91a8; padding: 20px; }
+  footer a { color: #4f46e5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>moonschema playground</h1>
+  <p>纯 MoonBit 实现的 JSON Schema 2020-12 校验引擎，编译到 JS（ESM）在浏览器直接运行 ·
+     引擎代码 <code>playground/api.mbt</code> · 支持 <code>x-rules</code> 跨字段规则 · 中英双语错误</p>
+</header>
+<main>
+  <div class="toolbar">
+    <label>示例：</label>
+    <select id="preset">
+      <option value="user">用户资料（基础关键词）</option>
+      <option value="order">订单（x-rules 跨字段规则）</option>
+      <option value="tree">递归树（$ref 递归）</option>
+    </select>
+    <button id="btn">校验</button>
+    <span class="meta" id="ver"></span>
+  </div>
+  <div class="grid">
+    <div class="panel">
+      <h2>JSON Schema</h2>
+      <textarea id="schema" spellcheck="false"></textarea>
+    </div>
+    <div class="panel">
+      <h2>实例 JSON</h2>
+      <textarea id="data" spellcheck="false"></textarea>
+    </div>
+  </div>
+  <div style="height:14px"></div>
+  <div id="banner"></div>
+  <div id="errors"></div>
+</main>
+<footer>
+  moonschema — <a href="https://github.com/QuietlyChan/moonschema">GitHub</a> ·
+  Apache-2.0 · MoonBit OSC2026
+</footer>
+<script type="module">
+import { validate_json, version } from './moonschema.js'
+
+const $ = id => document.getElementById(id)
+const presets = {
+  user: {
+    schema: {
+      type: 'object',
+      required: ['name', 'email'],
+      properties: {
+        name: { type: 'string', minLength: 2, maxLength: 50 },
+        email: { type: 'string' },
+        age: { type: 'integer', minimum: 0, maximum: 150 },
+        role: { enum: ['admin', 'user'] },
+        tags: { type: 'array', items: { type: 'string' }, uniqueItems: true, maxItems: 5 }
+      },
+      additionalProperties: false
+    },
+    data: { name: 'A', email: 42, age: -1, role: 'guest', tags: ['a', 'a'], extra: true }
+  },
+  order: {
+    schema: {
+      type: 'object',
+      required: ['start', 'end', 'total', 'items'],
+      properties: {
+        start: { type: 'string' },
+        end: { type: 'string' },
+        total: { type: 'number' },
+        items: {
+          type: 'array',
+          items: { type: 'object', properties: { price: { type: 'number' }, qty: { type: 'number' } } }
+        }
+      },
+      additionalProperties: false,
+      'x-rules': ['end > start', 'items[0].price * items[0].qty == total']
+    },
+    data: { start: '2026-05-01', end: '2026-01-01', total: 99, items: [{ price: 10, qty: 2 }] }
+  },
+  tree: {
+    schema: {
+      type: 'object',
+      required: ['value'],
+      properties: {
+        value: { type: 'integer' },
+        children: { type: 'array', items: { $ref: '#' } }
+      }
+    },
+    data: { value: 1, children: [{ value: 2, children: [{ value: 'oops' }] }, { value: 3 }] }
+  }
+}
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function render(out) {
+  const banner = $('banner'), box = $('errors')
+  let result
+  try { result = JSON.parse(out) } catch { banner.className = 'warn'; banner.style.display = 'block'
+    banner.textContent = '引擎返回无法解析：' + out; box.innerHTML = ''; return }
+  if (result.schema_error) {
+    banner.className = 'fail'; banner.style.display = 'block'
+    banner.textContent = 'Schema 不合法：' + result.schema_error
+    box.innerHTML = ''; return
+  }
+  if (result.data_parse_error) {
+    banner.className = 'fail'; banner.style.display = 'block'
+    banner.textContent = '实例 JSON 解析失败：' + result.data_parse_error
+    box.innerHTML = ''; return
+  }
+  if (result.valid) {
+    banner.className = 'ok'; banner.style.display = 'block'
+    banner.textContent = '✓ 校验通过'
+    box.innerHTML = ''; return
+  }
+  banner.className = 'fail'; banner.style.display = 'block'
+  banner.textContent = `✗ 校验失败：${result.errors.length} 个错误`
+  const rows = result.errors.map(e => `
+    <tr>
+      <td class="path">${esc(e.instance_path || '(root)')}</td>
+      <td class="kw">${esc(e.keyword)}</td>
+      <td>${esc(e.message)}</td>
+      <td class="path">${esc(e.schema_path)}</td>
+    </tr>`).join('')
+  box.innerHTML = `
+    <table>
+      <tr><th>实例位置</th><th>关键词</th><th>消息</th><th>Schema 位置</th></tr>
+      ${rows}
+    </table>`
+}
+
+function run() { render(validate_json($('schema').value, $('data').value)) }
+
+$('preset').addEventListener('change', () => {
+  const p = presets[$('preset').value]
+  $('schema').value = JSON.stringify(p.schema, null, 2)
+  $('data').value = JSON.stringify(p.data, null, 2)
+  run()
+})
+$('btn').addEventListener('click', run)
+let deb
+for (const id of ['schema', 'data']) {
+  $(id).addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(run, 400) })
+}
+
+$('ver').textContent = 'engine v' + version()
+$('preset').dispatchEvent(new Event('change'))
+</script>
+</body>
+</html>

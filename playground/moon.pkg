@@ -1,0 +1,18 @@
+import {
+  "QuietlyChan/moonschema",
+}
+
+options(
+  link: {
+    "js": {
+      "exports": [
+        "version",
+        "validate_json",
+        "compile_schema",
+        "validate_with",
+        "check_with",
+      ],
+      "format": "esm",
+    },
+  },
+)

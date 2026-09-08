@@ -71,6 +71,48 @@ for e in errors {
 }
 ```
 
+## 在浏览器中使用（Playground）
+
+Playground 将引擎编译为 JS（ESM）模块在浏览器直接运行：
+
+```bash
+bash playground/build.sh        # moon build --target js --release --strip + 拷贝产物
+cd playground/web && python -m http.server 8080   # 或 npx serve .
+# 打开 http://localhost:8080
+```
+
+页面提供三个可编辑预设（基础关键词 / `x-rules` 跨字段规则 / `$ref` 递归），实时校验并以表格展示 `instance_path` / `schema_path` 双路径错误。已在 Chromium 实测。
+
+宿主侧集成 API（`playground/api.mbt`，经 `moon.pkg` 的 `link: { js: { exports: [...] } }` 导出）：
+
+| 导出函数 | 用途 |
+|---|---|
+| `validate_json(schemaText, dataText)` | 一次调用完成解析→编译→校验，返回结构化 JSON 结果 |
+| `compile_schema(schemaText) -> handle` | ajv 式编译一次（句柄，失败 -1） |
+| `check_with(handle, dataText) -> bool` | 热路径布尔判定 |
+| `validate_with(handle, dataText) -> string` | 校验并返回完整错误 JSON |
+
+> 关于 wasm-gc：引擎已验证可在 wasm-gc 目标编译并导出数值函数（`link.wasm-gc.exports`，Node 24 `WebAssembly.instantiate` 实测通过）；但字符串在 wasm-gc 边界是 GC 对象，对 JS 不透明，需 JS-string-builtins 方案——Playground 因此选择字符串原生互通的 JS 后端。
+
+## 基准测试（vs ajv / zod）
+
+Node 24，订单式嵌套 schema，每轮 5000 实例 × 7 轮取最优（`cd benchmark && npm i && node bench.mjs` 复现，详见 [benchmark/RESULTS.md](benchmark/RESULTS.md)）：
+
+| 实现 / 工作负载 | ops/s | µs per validate |
+|---|---|---|
+| ajv valid (预解析对象) | 3,066,168 | 0.33 |
+| zod valid (预解析对象) | 456,988 | 2.19 |
+| ajv valid (+JSON.parse) | 400,898 | 2.49 |
+| moonschema valid (字符串入口) | 89,177 | 11.21 |
+| zod invalid (预解析对象) | 155,439 | 6.43 |
+| moonschema invalid (字符串+错误报告) | 61,078 | 16.37 |
+
+**编译期一次性成本**：moonschema `compile_schema` **6.4ms** vs ajv `compile` 49.9ms——**快约 8 倍**（树编译 vs 代码生成）。吞吐方面 ajv 的代码生成在 V8 上仍是天花板；moonschema 当前为树解释式执行，字符串入口口径与 zod+parse 同量级，优化空间见路线图。
+
+## 性质测试（roundtrip）
+
+`builder/roundtrip_wbtest.mbt`：种子化 LCG 生成 1100 个随机 JSON 实例（覆盖全部类型与嵌套），验证三条性质——`to_schema()` 文档序列化往返后判定一致、重复编译判定确定、`check`（fast path）与 `validate`（错误收集）互恰。
+
 ## 已支持的关键词
 
 | 类别 | 关键词 |
@@ -183,9 +225,9 @@ moon fmt && moon info       # 格式化 + 更新包接口
 
 - [x] **W1** 引擎核心：编译器 + 校验器 + 错误模型 + `$ref` 惰性解析（双目标测试通过）
 - [x] **W2** 官方 JSON-Schema-Test-Suite 接入与跑分（**974/975 判定通过，99.90%**）；`pattern` / `patternProperties`（基于 core 正则引擎）；整数解析溢出修复（core 上游 bug workaround）
-- [x] **W3** 跨字段动态规则 DSL（`x-rules` + builder `.satisfy()`，编译期语法检查）；错误消息 i18n（中/英）
-- [ ] **W3 剩余** quickcheck 性质测试（builder ⇄ JSON Schema 文档 roundtrip）
-- [ ] **W4** WASM Playground（浏览器实时校验）；对 ajv / zod 的基准测试报告；发布到 mooncakes.io
+- [x] **W3** 跨字段动态规则 DSL（`x-rules` + builder `.satisfy()`，编译期语法检查）；错误消息 i18n（中/英）；quickcheck 式 roundtrip 性质测试（种子化随机实例 ×1100）
+- [x] **W4** Node 基准测试报告（vs ajv/zod，编译期快 8×）；浏览器 Playground（JS 后端 ESM 导出，含宿主集成 API）
+- [ ] **后续** wasm-gc 字符串边界（JS-string-builtins）；校验吞吐优化（错误结构/查找路径）；mooncakes 发布
 
 ## License
 
