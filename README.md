@@ -1,5 +1,7 @@
 # moonschema
 
+[简体中文](./README.md) | [English](./README.en.md)
+
 [![CI](https://github.com/QuietlyChan/moonschema/actions/workflows/ci.yml/badge.svg)](https://github.com/QuietlyChan/moonschema/actions/workflows/ci.yml)
 [![Playground 在线体验](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%20Playground-%E7%82%B9%E5%87%BB%E8%AF%95%E7%8E%A9-4f46e5)](https://quietlychan.github.io/moonschema/)
 [![mooncakes.io](https://img.shields.io/badge/mooncakes.io-QuietlyChan%2Fmoonschema-9333ea)](https://mooncakes.io/docs/#/QuietlyChan/moonschema/)
@@ -234,8 +236,8 @@ moon fmt && moon info       # 格式化 + 更新包接口
 - [x] **W1** 引擎核心：编译器 + 校验器 + 错误模型 + `$ref` 惰性解析（双目标测试通过）
 - [x] **W2** 官方 JSON-Schema-Test-Suite 接入与跑分（**974/975 判定通过，99.90%**）；`pattern` / `patternProperties`（基于 core 正则引擎）；整数解析溢出修复（core 上游 bug workaround）
 - [x] **W3** 跨字段动态规则 DSL（`x-rules` + builder `.satisfy()`，编译期语法检查）；错误消息 i18n（中/英）；quickcheck 式 roundtrip 性质测试（种子化随机实例 ×1100）
-- [x] **W4** Node 基准测试报告（vs ajv/zod，编译期快 9×）；浏览器 Playground（JS 后端 ESM 导出，含宿主集成 API）
-- [ ] **后续** wasm-gc 字符串边界接入（字节块协议已验证，见附录）；校验吞吐优化（错误结构/查找路径）；mooncakes 发布
+- [x] **W4** Node 基准测试报告（vs ajv/zod，编译期快 9×）；浏览器 Playground（JS 后端 ESM 导出，含宿主集成 API）；发布到 mooncakes.io（`QuietlyChan/moonschema` 0.1.0）
+- [ ] **后续** wasm-gc 字符串边界接入（字节块协议已验证，见附录）；校验吞吐优化（错误结构/查找路径）
 
 ## License
 
