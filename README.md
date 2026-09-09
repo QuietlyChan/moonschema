@@ -9,8 +9,6 @@
 
 **一个引擎、两种 API**：用纯 MoonBit 实现的 [JSON Schema 2020-12](https://json-schema.org/draft/2020-12) 校验引擎，同时提供 [ajv](https://ajv.js.org/) 风格的标准模式编译与 [zod](https://zod.dev/) 风格的流式构建器。编译到 **WASM-GC / JS / Native** 三目标，天然面向 Web 与服务端双场景。
 
-> 本项目为 [2026 MoonBit 国产基础软件开源大赛](https://moonbitlang.github.io/OSC2026/) 参赛项目。
-
 ![moonschema playground 演示](docs/demo.gif)
 
 ## 为什么是 moonschema
